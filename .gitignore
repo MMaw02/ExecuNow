@@ -1,0 +1,18 @@
+# Local tooling and agent workspace
+.codex/
+.pnpm-store/
+
+# Editor settings
+.vscode/
+.idea/
+
+# OS and logs
+.DS_Store
+*.log
+
+# Common generated artifacts at repo root
+node_modules/
+dist/
+coverage/
+.cache/
+*.tsbuildinfo

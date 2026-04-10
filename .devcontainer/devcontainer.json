@@ -1,0 +1,37 @@
+{
+  "name": "Tauri 2",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:4-24-trixie",
+
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {},
+    "ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+      "packages": "libwebkit2gtk-4.1-dev,build-essential,pkg-config,libxdo-dev,libssl-dev,libayatana-appindicator3-dev,librsvg2-dev"
+    },
+    "ghcr.io/devcontainers/features/desktop-lite:1": {}
+  },
+
+  "forwardPorts": [6080, 5901],
+
+  "portsAttributes": {
+    "6080": {
+      "label": "Desktop (noVNC)",
+      "onAutoForward": "notify"
+    },
+    "5901": {
+      "label": "Desktop (VNC)",
+      "onAutoForward": "silent"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tauri-apps.tauri-vscode",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "yzhang.markdown-all-in-one"
+      ]
+    }
+  }
+}
