@@ -1,5 +1,6 @@
-export type View = "home" | "active" | "outcome" | "blocking";
-export type DurationOption = 15 | 25 | 50;
+export type NavView = "today" | "history" | "summary" | "blocking" | "settings";
+export type View = NavView | "active" | "outcome";
+export type DurationOption = number;
 export type SessionOutcome = "completed" | "incomplete" | "abandoned";
 export type SessionResult = SessionOutcome | null;
 
@@ -10,19 +11,31 @@ export type SessionStats = {
   focusMinutes: number;
 };
 
+export type SessionRecord = {
+  id: string;
+  task: string;
+  duration: DurationOption;
+  capturedMinutes: number;
+  result: SessionOutcome;
+  failureReason: string;
+  strictBlocking: boolean;
+  endedAt: string;
+};
+
 export type SessionState = {
   view: View;
   taskTitle: string;
   selectedDuration: DurationOption;
   strictBlocking: boolean;
   sessionTask: string;
-  sessionDuration: number;
+  sessionDuration: DurationOption;
   remainingSeconds: number;
   isPaused: boolean;
   pauseUsed: boolean;
   sessionResult: SessionResult;
   failureReason: string;
   stats: SessionStats;
+  history: SessionRecord[];
 };
 
 export type SessionAction =
@@ -39,13 +52,6 @@ export type SessionAction =
   | { type: "tick" };
 
 export type NavigationItem = {
-  id: View;
+  id: NavView;
   label: string;
-  support: string;
-};
-
-export type ViewCopy = {
-  eyebrow: string;
-  title: string;
-  lead: string;
 };

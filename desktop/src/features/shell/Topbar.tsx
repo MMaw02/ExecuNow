@@ -1,19 +1,14 @@
-import type { ViewCopy } from "../session/session.types.ts";
-
 type TopbarProps = {
-  copy: ViewCopy;
+  currentLabel: string;
   statusLabel: string;
 };
 
-export function Topbar({ copy, statusLabel }: TopbarProps) {
+export function Topbar({ currentLabel, statusLabel }: TopbarProps) {
   return (
     <header className="topbar">
-      <div className="topbar-copy">
-        <p className="eyebrow">{copy.eyebrow}</p>
-        <div className="topbar-heading">
-          <h2>{copy.title}</h2>
-          <p className="lead">{copy.lead}</p>
-        </div>
+      <div className="topbar-context">
+        <span className="eyebrow">Workspace</span>
+        <strong>{currentLabel}</strong>
       </div>
 
       <div className="topbar-status">

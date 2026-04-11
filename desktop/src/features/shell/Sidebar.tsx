@@ -1,91 +1,134 @@
+import type { LucideIcon } from "lucide-react";
+import {
+  ChartColumn,
+  History,
+  House,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Settings,
+  Shield,
+} from "lucide-react";
 import type {
   NavigationItem,
+  NavView,
   View,
 } from "../session/session.types.ts";
 
 type SidebarProps = {
   navItems: readonly NavigationItem[];
-  activeView: View;
+  activeView: NavView;
+  isCollapsed: boolean;
   canNavigateTo: (target: View) => boolean;
-  onNavigate: (target: View) => void;
-  blockingModeLabel: string;
-  blockingModeDescription: string;
-  completedTodayLabel: string;
-  focusMinutes: number;
+  onNavigate: (target: NavView) => void;
+  onToggleCollapsed: () => void;
+};
+
+const ICONS: Record<NavView, LucideIcon> = {
+  today: House,
+  history: History,
+  summary: ChartColumn,
+  blocking: Shield,
+  settings: Settings,
 };
 
 export function Sidebar({
   navItems,
   activeView,
+  isCollapsed,
   canNavigateTo,
   onNavigate,
-  blockingModeLabel,
-  blockingModeDescription,
-  completedTodayLabel,
-  focusMinutes,
+  onToggleCollapsed,
 }: SidebarProps) {
+  const primaryItems = navItems.filter((item) => item.id !== "settings");
+  const settingsItem = navItems.find((item) => item.id === "settings");
+
   return (
-    <aside className="sidebar" aria-label="Primary sidebar">
-      <div className="sidebar-brand">
-        <p className="eyebrow">ExecuNow</p>
-        <h1>Execution Console</h1>
-        <p className="support">
-          See task, start focus, hold the line, then close the loop.
-        </p>
-      </div>
+    <aside className={isCollapsed ? "sidebar collapsed" : "sidebar"}>
+      <div className="sidebar-header">
+        <button
+          type="button"
+          className="sidebar-collapse"
+          onClick={onToggleCollapsed}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {isCollapsed ? (
+            <PanelLeftOpen size={18} aria-hidden="true" />
+          ) : (
+            <PanelLeftClose size={18} aria-hidden="true" />
+          )}
+        </button>
 
-      <div className="sidebar-section">
-        <span className="sidebar-section-label">Navigation</span>
-        <nav className="sidebar-nav" aria-label="Primary navigation">
-          {navItems.map((item) => {
-            const disabled = !canNavigateTo(item.id);
-            const className = item.id === activeView ? "nav-item active" : "nav-item";
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={className}
-                onClick={() => onNavigate(item.id)}
-                disabled={disabled}
-                aria-current={item.id === activeView ? "page" : undefined}
-              >
-                <strong>{item.label}</strong>
-                <span>{item.support}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      <div className="sidebar-meta">
-        <div className="sidebar-section">
-          <span className="sidebar-section-label">Session status</span>
-          <div className="sidebar-state">
-            <span className="summary-label">Blocking</span>
-            <strong>{blockingModeLabel}</strong>
-            <p>{blockingModeDescription}</p>
-          </div>
-        </div>
-
-        <div className="sidebar-section">
-          <span className="sidebar-section-label">Today</span>
-          <div className="sidebar-stat-grid" aria-label="Today status">
-            <div className="sidebar-stat">
-              <span className="strip-label">Completed</span>
-              <strong>{completedTodayLabel}</strong>
+        <div className="sidebar-brand">
+          <span className="brand-mark" aria-hidden="true" />
+          {!isCollapsed && (
+            <div className="brand-copy">
+              <strong>EXECUNOW</strong>
+              <span>Peak performance</span>
             </div>
-            <div className="sidebar-stat">
-              <span className="strip-label">Focused</span>
-              <strong>{focusMinutes} min</strong>
-            </div>
-            <div className="sidebar-stat">
-              <span className="strip-label">Rule</span>
-              <strong>1 pause max</strong>
-            </div>
-          </div>
+          )}
         </div>
       </div>
+
+      <nav className="sidebar-nav" aria-label="Primary navigation">
+        {primaryItems.map((item) => (
+          <SidebarItem
+            key={item.id}
+            item={item}
+            icon={ICONS[item.id]}
+            activeView={activeView}
+            isCollapsed={isCollapsed}
+            disabled={!canNavigateTo(item.id)}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </nav>
+
+      {settingsItem ? (
+        <div className="sidebar-footer">
+          <SidebarItem
+            item={settingsItem}
+            icon={ICONS.settings}
+            activeView={activeView}
+            isCollapsed={isCollapsed}
+            disabled={!canNavigateTo(settingsItem.id)}
+            onNavigate={onNavigate}
+          />
+        </div>
+      ) : null}
     </aside>
+  );
+}
+
+type SidebarItemProps = {
+  item: NavigationItem;
+  icon: LucideIcon;
+  activeView: NavView;
+  isCollapsed: boolean;
+  disabled: boolean;
+  onNavigate: (target: NavView) => void;
+};
+
+function SidebarItem({
+  item,
+  icon: Icon,
+  activeView,
+  isCollapsed,
+  disabled,
+  onNavigate,
+}: SidebarItemProps) {
+  return (
+    <button
+      type="button"
+      className={item.id === activeView ? "sidebar-item active" : "sidebar-item"}
+      onClick={() => onNavigate(item.id)}
+      disabled={disabled}
+      aria-current={item.id === activeView ? "page" : undefined}
+      aria-label={item.label}
+      title={isCollapsed ? item.label : undefined}
+    >
+      <Icon size={18} strokeWidth={2.1} aria-hidden="true" />
+      {!isCollapsed && <span>{item.label}</span>}
+    </button>
   );
 }

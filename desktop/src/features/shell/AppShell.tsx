@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 type AppShellProps = {
   isSessionMode: boolean;
+  isSidebarCollapsed: boolean;
   sidebar: ReactNode;
   topbar: ReactNode;
   children: ReactNode;
@@ -9,17 +10,26 @@ type AppShellProps = {
 
 export function AppShell({
   isSessionMode,
+  isSidebarCollapsed,
   sidebar,
   topbar,
   children,
 }: AppShellProps) {
+  const className = [
+    "app-shell",
+    isSessionMode ? "session-mode" : "",
+    isSidebarCollapsed ? "sidebar-collapsed" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <main className="app-shell">
-      <section className={isSessionMode ? "stage session-mode" : "stage"}>
+    <main className={className}>
+      <section className="app-frame">
         {sidebar}
-        <div className="content-stage">
+        <div className="shell-stage">
           {topbar}
-          {children}
+          <div className="app-content">{children}</div>
         </div>
       </section>
     </main>

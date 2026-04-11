@@ -1,6 +1,8 @@
 import { DURATIONS } from "./session.constants.ts";
 import type {
   SessionAction,
+  SessionOutcome,
+  SessionRecord,
   SessionState,
   SessionStats,
   View,
@@ -17,7 +19,7 @@ const INITIAL_STATS: SessionStats = {
 
 export function createInitialSessionState(): SessionState {
   return {
-    view: "home",
+    view: "today",
     taskTitle: "",
     selectedDuration: DEFAULT_DURATION,
     strictBlocking: true,
@@ -29,6 +31,7 @@ export function createInitialSessionState(): SessionState {
     sessionResult: null,
     failureReason: "",
     stats: INITIAL_STATS,
+    history: [],
   };
 }
 
@@ -47,7 +50,7 @@ export function sessionReducer(
         ...state,
         selectedDuration: action.value,
         remainingSeconds:
-          state.view === "home" ? action.value * 60 : state.remainingSeconds,
+          !isSessionFlowLocked(state) ? action.value * 60 : state.remainingSeconds,
       };
     case "strictBlockingToggled":
       if (isSessionFlowLocked(state)) {
@@ -123,9 +126,11 @@ export function sessionReducer(
         return state;
       }
 
+      const sessionRecord = createSessionRecord(state);
+
       return {
         ...state,
-        view: "home",
+        view: "today",
         taskTitle: "",
         sessionTask: "",
         sessionDuration: state.selectedDuration,
@@ -140,6 +145,7 @@ export function sessionReducer(
           focusMinutes:
             state.stats.focusMinutes + getCapturedMinutesForSave(state),
         },
+        history: [sessionRecord, ...state.history].slice(0, 24),
       };
     case "tick":
       if (state.view !== "active" || state.isPaused) {
@@ -206,30 +212,35 @@ export function getElapsedMinutes(state: SessionState) {
   );
 }
 
-export function getCompletedTodayLabel(stats: SessionStats) {
-  const closedSessions = stats.completed + stats.incomplete + stats.abandoned;
-
-  return closedSessions > 0 ? `${stats.completed} completed` : "No sessions closed yet";
-}
-
-export function getBlockingModeLabel(strictBlocking: boolean) {
-  return strictBlocking ? "Armed" : "Relaxed";
-}
-
-export function getBlockingModeDescription(strictBlocking: boolean) {
-  return strictBlocking
-    ? "Apps and sites stay firm during focus."
-    : "Blocking stays advisory until you tighten it.";
-}
-
 export function getTopbarStatusLabel(
-  state: Pick<SessionState, "isPaused" | "strictBlocking">,
+  state: Pick<SessionState, "view" | "isPaused" | "strictBlocking">,
 ) {
   if (state.isPaused) {
-    return "Session paused";
+    return "Paused";
+  }
+
+  if (state.view === "active") {
+    return state.strictBlocking ? "Session live - strict" : "Session live";
+  }
+
+  if (state.view === "outcome") {
+    return "Log outcome";
   }
 
   return state.strictBlocking ? "Blocking armed" : "Blocking relaxed";
+}
+
+function createSessionRecord(state: SessionState): SessionRecord {
+  return {
+    id: `${Date.now()}`,
+    task: state.sessionTask || "Focus block",
+    duration: state.sessionDuration,
+    capturedMinutes: getCapturedMinutesForSave(state),
+    result: state.sessionResult as SessionOutcome,
+    failureReason: state.failureReason,
+    strictBlocking: state.strictBlocking,
+    endedAt: new Date().toISOString(),
+  };
 }
 
 function getCapturedMinutesForSave(state: SessionState) {

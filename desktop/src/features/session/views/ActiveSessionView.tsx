@@ -21,17 +21,17 @@ export function ActiveSessionView({
   onCloseSession,
 }: ActiveSessionViewProps) {
   return (
-    <section className="screen active-screen">
-      <div className="timer-shell">
-        <span className="timer-state">
+    <section className="page active-page">
+      <div className="session-stage">
+        <span className="eyebrow">
           {isPaused
             ? "Paused"
             : strictBlocking
-              ? "Blocking active"
-              : "Blocking relaxed"}
+              ? "Strict focus live"
+              : "Focus block live"}
         </span>
-        <h3 className="timer-display">{formatClock(remainingSeconds)}</h3>
-        <p className="session-task">{sessionTask}</p>
+        <h1 className="timer-display">{formatClock(remainingSeconds)}</h1>
+        <p className="session-task session-task-large">{sessionTask}</p>
         <p className="support center">
           {pauseUsed
             ? isPaused
@@ -39,36 +39,36 @@ export function ActiveSessionView({
               : "Pause already used for this session."
             : "One short pause is available if execution stalls."}
         </p>
-      </div>
 
-      <div className="active-controls">
-        <button
-          type="button"
-          className="primary-button"
-          onClick={() => onCloseSession("completed")}
-        >
-          Complete session
-        </button>
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={onTogglePause}
-          disabled={pauseUsed && !isPaused}
-        >
-          {isPaused ? "Resume session" : pauseUsed ? "Pause used" : "Pause once"}
-        </button>
-        <button
-          type="button"
-          className="ghost-button warning"
-          onClick={() => onCloseSession("abandoned")}
-        >
-          Abandon
-        </button>
-      </div>
+        <div className="active-controls">
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => onCloseSession("completed")}
+          >
+            Complete session
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onTogglePause}
+            disabled={pauseUsed && !isPaused}
+          >
+            {isPaused ? "Resume" : pauseUsed ? "Pause used" : "Pause once"}
+          </button>
+          <button
+            type="button"
+            className="ghost-button warning"
+            onClick={() => onCloseSession("abandoned")}
+          >
+            Abandon
+          </button>
+        </div>
 
-      <div className="active-note">
-        <span className="summary-label">Focus rule</span>
-        <strong>Navigation and settings stay quiet until this block closes.</strong>
+        <div className="rule-note">
+          <span className="summary-label">Rule</span>
+          <strong>Stay here until the block is closed.</strong>
+        </div>
       </div>
     </section>
   );

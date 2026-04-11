@@ -1,18 +1,16 @@
 import { useEffect, useReducer } from "react";
-import { NAV_ITEMS, VIEW_COPY } from "./session.constants.ts";
+import { NAV_ITEMS } from "./session.constants.ts";
 import {
   canNavigateTo,
   createInitialSessionState,
-  getBlockingModeDescription,
-  getBlockingModeLabel,
-  getCompletedTodayLabel,
   getTopbarStatusLabel,
-  isSessionFlowLocked,
   isSessionPrepared,
+  isSessionFlowLocked,
   sessionReducer,
 } from "./session.model.ts";
 import type {
   DurationOption,
+  NavView,
   SessionOutcome,
   View,
 } from "./session.types.ts";
@@ -43,13 +41,10 @@ export function useSessionFlow() {
     state,
     derived: {
       navItems: NAV_ITEMS,
-      currentViewCopy: VIEW_COPY[state.view],
+      activeNav: getActiveNavView(state.view),
       isSessionMode: state.view === "active",
       sessionPrepared,
       sessionFlowLocked,
-      completedTodayLabel: getCompletedTodayLabel(state.stats),
-      blockingModeLabel: getBlockingModeLabel(state.strictBlocking),
-      blockingModeDescription: getBlockingModeDescription(state.strictBlocking),
       topbarStatusLabel: getTopbarStatusLabel(state),
       canNavigateTo: (target: View) => canNavigateTo(state, target),
     },
@@ -90,4 +85,12 @@ export function useSessionFlow() {
       },
     },
   };
+}
+
+function getActiveNavView(view: View): NavView {
+  if (view === "active" || view === "outcome") {
+    return "today";
+  }
+
+  return view;
 }
