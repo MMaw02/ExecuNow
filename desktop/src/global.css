@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+:root {
+  --base-deep: #041124;
+  --shell-background: #061930;
+  --surface-subtle: #0a1d38;
+  --surface-strong: #0d2648;
+  --surface-active: #11315d;
+  --border-subtle: rgba(140, 170, 222, 0.16);
+  --border-strong: rgba(140, 170, 222, 0.28);
+  --text-primary: #f4f7ff;
+  --text-secondary: #9bb2d6;
+  --text-muted: #7387ab;
+  --accent-primary: #1978e5;
+  --accent-support: #8caade;
+  --accent-success: #4edea3;
+  --accent-warning: #ea580c;
+  --radius-large: 10px;
+  --radius-medium: 9px;
+  --radius-small: 8px;
+  --shadow-soft: 0 24px 48px rgba(0, 0, 0, 0.22);
+}
+
+@theme inline {
+  --font-sans: Bahnschrift, "Segoe UI", "Trebuchet MS", sans-serif;
+  --color-base-deep: var(--base-deep);
+  --color-shell-background: var(--shell-background);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-strong: var(--surface-strong);
+  --color-surface-active: var(--surface-active);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-support: var(--accent-support);
+  --color-accent-success: var(--accent-success);
+  --color-accent-warning: var(--accent-warning);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    font-weight: 400;
+    color: var(--text-primary);
+    background: var(--base-deep);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  button {
+    border: 0;
+  }
+
+  body.window-main {
+    background:
+      radial-gradient(circle at 50% 0%, rgba(25, 120, 229, 0.08), transparent 32%),
+      linear-gradient(180deg, rgba(0, 34, 90, 0.12), transparent 42%),
+      var(--base-deep);
+  }
+
+  body.window-startup-widget {
+    background: transparent;
+  }
+}

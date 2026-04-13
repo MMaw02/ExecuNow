@@ -5,6 +5,7 @@ import type {
   SessionRecord,
   SessionState,
   SessionStats,
+  SessionTaskDraft,
   View,
 } from "./session.types.ts";
 
@@ -52,6 +53,40 @@ export function sessionReducer(
         remainingSeconds:
           !isSessionFlowLocked(state) ? action.value * 60 : state.remainingSeconds,
       };
+    case "taskPreparedFromWidget": {
+      const draft = normalizeSessionTaskDraft(action.value);
+
+      return {
+        ...state,
+        view: "today",
+        taskTitle: draft.title,
+        selectedDuration: draft.duration,
+        sessionTask: "",
+        sessionDuration: draft.duration,
+        remainingSeconds: draft.duration * 60,
+        isPaused: false,
+        pauseUsed: false,
+        sessionResult: null,
+        failureReason: "",
+      };
+    }
+    case "sessionStartedFromWidget": {
+      const draft = normalizeSessionTaskDraft(action.value);
+
+      return {
+        ...state,
+        view: "active",
+        taskTitle: draft.title,
+        selectedDuration: draft.duration,
+        sessionTask: draft.title,
+        sessionDuration: draft.duration,
+        remainingSeconds: draft.duration * 60,
+        isPaused: false,
+        pauseUsed: false,
+        sessionResult: null,
+        failureReason: "",
+      };
+    }
     case "strictBlockingToggled":
       if (isSessionFlowLocked(state)) {
         return state;
@@ -247,6 +282,13 @@ function getCapturedMinutesForSave(state: SessionState) {
   return state.sessionResult === "completed"
     ? state.sessionDuration
     : getElapsedMinutes(state);
+}
+
+function normalizeSessionTaskDraft(draft: SessionTaskDraft): SessionTaskDraft {
+  return {
+    title: draft.title.trim(),
+    duration: Math.max(Math.trunc(draft.duration), 1),
+  };
 }
 
 function assertNever(value: never): never {

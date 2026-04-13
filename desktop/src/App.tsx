@@ -1,5 +1,5 @@
-import { useState } from "react";
-import "./App.css";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { useEffect, useEffectEvent, useState } from "react";
 import { BlockingSettingsView } from "./features/blocking/BlockingSettingsView.tsx";
 import { AppShell } from "./features/shell/AppShell.tsx";
 import { Sidebar } from "./features/shell/Sidebar.tsx";
@@ -11,10 +11,56 @@ import { HomeView } from "./features/session/views/HomeView.tsx";
 import { OutcomeView } from "./features/session/views/OutcomeView.tsx";
 import { SettingsView } from "./features/session/views/SettingsView.tsx";
 import { SummaryView } from "./features/session/views/SummaryView.tsx";
+import { TasksView } from "./features/widget/TasksView.tsx";
+import {
+  consumePendingWidgetAction,
+  isTauriRuntime,
+  MAIN_WINDOW_LABEL,
+  openStartupWidgetWindowFromMain,
+} from "./features/widget/widget.events.ts";
 
 function App() {
   const { state, derived, actions } = useSessionFlow();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  const processPendingWidgetAction = useEffectEvent(() => {
+    const pendingAction = consumePendingWidgetAction();
+
+    if (!pendingAction) {
+      return;
+    }
+
+    if (pendingAction.type === "open-tasks") {
+      actions.navigateTo("tasks");
+      return;
+    }
+
+    actions.startSessionFromWidgetTask(pendingAction.payload);
+  });
+
+  useEffect(() => {
+    if (!isTauriRuntime() || getCurrentWebviewWindow().label !== MAIN_WINDOW_LABEL) {
+      return;
+    }
+    const handleFocus = () => {
+      processPendingWidgetAction();
+    };
+
+    processPendingWidgetAction();
+
+    window.addEventListener("focus", handleFocus);
+    const unsubscribeVisibility = () => {
+      if (document.visibilityState === "visible") {
+        processPendingWidgetAction();
+      }
+    };
+    document.addEventListener("visibilitychange", unsubscribeVisibility);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", unsubscribeVisibility);
+    };
+  }, []);
 
   let content = null;
 
@@ -34,6 +80,9 @@ function App() {
           onStartSession={actions.startSession}
         />
       );
+      break;
+    case "tasks":
+      content = <TasksView />;
       break;
     case "history":
       content = <HistoryView history={state.history} />;
@@ -110,6 +159,9 @@ function App() {
             "Today"
           }
           statusLabel={derived.topbarStatusLabel}
+          onOpenWidget={
+            derived.sessionFlowLocked ? undefined : () => void openStartupWidgetWindowFromMain()
+          }
         />
       }
     >

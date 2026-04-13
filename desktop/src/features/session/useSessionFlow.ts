@@ -12,6 +12,7 @@ import type {
   DurationOption,
   NavView,
   SessionOutcome,
+  SessionTaskDraft,
   View,
 } from "./session.types.ts";
 
@@ -61,6 +62,12 @@ export function useSessionFlow() {
       },
       selectDuration(value: DurationOption) {
         dispatch({ type: "durationSelected", value });
+      },
+      prepareTaskFromWidget(value: SessionTaskDraft) {
+        dispatch({ type: "taskPreparedFromWidget", value });
+      },
+      startSessionFromWidgetTask(value: SessionTaskDraft) {
+        dispatch({ type: "sessionStartedFromWidget", value });
       },
       toggleStrictBlocking() {
         dispatch({ type: "strictBlockingToggled" });

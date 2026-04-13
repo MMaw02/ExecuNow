@@ -1,4 +1,4 @@
-export type NavView = "today" | "history" | "summary" | "blocking" | "settings";
+export type NavView = "today" | "tasks" | "history" | "summary" | "blocking" | "settings";
 export type View = NavView | "active" | "outcome";
 export type DurationOption = number;
 export type SessionOutcome = "completed" | "incomplete" | "abandoned";
@@ -22,6 +22,11 @@ export type SessionRecord = {
   endedAt: string;
 };
 
+export type SessionTaskDraft = {
+  title: string;
+  duration: DurationOption;
+};
+
 export type SessionState = {
   view: View;
   taskTitle: string;
@@ -41,6 +46,8 @@ export type SessionState = {
 export type SessionAction =
   | { type: "taskTitleChanged"; value: string }
   | { type: "durationSelected"; value: DurationOption }
+  | { type: "taskPreparedFromWidget"; value: SessionTaskDraft }
+  | { type: "sessionStartedFromWidget"; value: SessionTaskDraft }
   | { type: "strictBlockingToggled" }
   | { type: "navigated"; value: View }
   | { type: "sessionStarted" }

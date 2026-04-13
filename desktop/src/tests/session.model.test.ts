@@ -47,6 +47,39 @@ test("session supports a custom duration", () => {
   assert.equal(next.remainingSeconds, 35 * 60);
 });
 
+test("widget handoff can prepare a task on today", () => {
+  const initialState = createInitialSessionState();
+  const next = sessionReducer(initialState, {
+    type: "taskPreparedFromWidget",
+    value: {
+      title: "Outline onboarding checklist",
+      duration: 30,
+    },
+  });
+
+  assert.equal(next.view, "today");
+  assert.equal(next.taskTitle, "Outline onboarding checklist");
+  assert.equal(next.selectedDuration, 30);
+  assert.equal(next.remainingSeconds, 30 * 60);
+});
+
+test("widget handoff can start a session immediately", () => {
+  const initialState = createInitialSessionState();
+  const next = sessionReducer(initialState, {
+    type: "sessionStartedFromWidget",
+    value: {
+      title: "Review launch notes",
+      duration: 20,
+    },
+  });
+
+  assert.equal(next.view, "active");
+  assert.equal(next.taskTitle, "Review launch notes");
+  assert.equal(next.sessionTask, "Review launch notes");
+  assert.equal(next.sessionDuration, 20);
+  assert.equal(next.remainingSeconds, 20 * 60);
+});
+
 test("pause can only be consumed once", () => {
   const activeState = createActiveState();
   const pausedState = sessionReducer(activeState, { type: "pauseToggled" });

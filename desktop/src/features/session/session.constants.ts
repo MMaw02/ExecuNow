@@ -21,6 +21,7 @@ export const SUGGESTED_TASKS = [
 
 export const NAV_ITEMS: readonly NavigationItem[] = [
   { id: "today", label: "Today" },
+  { id: "tasks", label: "Tasks" },
   { id: "history", label: "History" },
   { id: "summary", label: "Summary" },
   { id: "blocking", label: "Blocking" },
