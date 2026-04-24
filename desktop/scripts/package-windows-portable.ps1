@@ -13,7 +13,22 @@ $portableExe = Join-Path $portableDir "ExecuNow.exe"
 
 Push-Location $projectRoot
 try {
+  $linkExe = Get-Command "link.exe" -ErrorAction SilentlyContinue
+
+  if (!$linkExe) {
+    throw @"
+The MSVC linker link.exe was not found.
+
+Install "Build Tools for Visual Studio" with the "Desktop development with C++" workload,
+then open a new PowerShell or "Developer PowerShell for VS" window and run this command again.
+"@
+  }
+
   pnpm tauri build --no-bundle
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "Tauri build failed. Portable package was not created."
+  }
 
   $sourceExe = $sourceExeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 

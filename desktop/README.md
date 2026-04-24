@@ -49,6 +49,19 @@ Install the Windows toolchain first:
    corepack prepare pnpm@10.31.0 --activate
    ```
 3. Rust for Windows with the MSVC toolchain.
+4. Build Tools for Visual Studio 2022 with the `Desktop development with C++`
+   workload. This provides the MSVC linker, `link.exe`. VS Code alone is not
+   enough.
+
+After installing the Visual Studio Build Tools, open a new PowerShell window and
+confirm the linker is available:
+
+```powershell
+where.exe link.exe
+```
+
+If that does not print a path, open `Developer PowerShell for VS 2022` from the
+Start menu and run the portable build there.
 
 Then run this from PowerShell or Windows Terminal, outside WSL:
 
