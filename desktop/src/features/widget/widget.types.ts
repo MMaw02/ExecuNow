@@ -7,6 +7,7 @@ export type WidgetTask = {
   title: string;
   estimateMinutes: DurationOption;
   priority: WidgetPriority;
+  tag: string | null;
   completed: boolean;
   createdAt: string;
 };
@@ -30,5 +31,6 @@ export type WidgetTaskUpdate = {
   title: string;
   estimateMinutes: DurationOption;
   priority: WidgetPriority;
+  tag: string | null;
   completed?: boolean;
 };

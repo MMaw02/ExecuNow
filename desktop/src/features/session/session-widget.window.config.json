@@ -1,0 +1,20 @@
+{
+  "title": "ExecuNow Session Widget",
+  "width": 820,
+  "height": 96,
+  "minWidth": 820,
+  "minHeight": 96,
+  "maxWidth": 820,
+  "maxHeight": 96,
+  "centerOnCreate": false,
+  "transparent": true,
+  "decorations": false,
+  "alwaysOnTop": true,
+  "visibleOnAllWorkspaces": true,
+  "skipTaskbar": true,
+  "resizable": false,
+  "maximizable": false,
+  "minimizable": false,
+  "shadow": false,
+  "topOffset": 24
+}

@@ -1,13 +1,19 @@
-import { useEffect, useReducer } from "react";
+import { useEffect, useRef, useReducer } from "react";
+import { toast } from "sonner";
+import { applyWebBlocking, clearWebBlocking } from "../blocking/web-blocking.runtime.ts";
+import { usePomodoroSettings } from "../pomodoro/usePomodoroSettings.ts";
 import { NAV_ITEMS } from "./session.constants.ts";
 import {
   canNavigateTo,
   createInitialSessionState,
-  getTopbarStatusLabel,
   isSessionPrepared,
   isSessionFlowLocked,
   sessionReducer,
 } from "./session.model.ts";
+import {
+  prepareBlockingForSession,
+  releaseBlockingAfterSession,
+} from "./session-blocking.ts";
 import type {
   DurationOption,
   NavView,
@@ -17,11 +23,18 @@ import type {
 } from "./session.types.ts";
 
 export function useSessionFlow() {
+  const { settings: pomodoroSettings } = usePomodoroSettings();
   const [state, dispatch] = useReducer(
     sessionReducer,
     undefined,
     createInitialSessionState,
   );
+  const stateRef = useRef(state);
+  const previousViewRef = useRef(state.view);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     if (state.view !== "active" || state.isPaused) {
@@ -35,6 +48,27 @@ export function useSessionFlow() {
     return () => window.clearInterval(timer);
   }, [state.view, state.isPaused]);
 
+  useEffect(() => {
+    const previousView = previousViewRef.current;
+    previousViewRef.current = state.view;
+
+    if (previousView !== "active" || state.view === "active") {
+      return;
+    }
+
+    void releaseBlockingAfterSession({
+      clear: clearWebBlocking,
+    }).then((result) => {
+      if (result.ok) {
+        return;
+      }
+
+      toast.error("ExecuNow could not restore the system hosts file.", {
+        description: result.error,
+      });
+    });
+  }, [state.view]);
+
   const sessionPrepared = isSessionPrepared(state);
   const sessionFlowLocked = isSessionFlowLocked(state);
 
@@ -46,7 +80,6 @@ export function useSessionFlow() {
       isSessionMode: state.view === "active",
       sessionPrepared,
       sessionFlowLocked,
-      topbarStatusLabel: getTopbarStatusLabel(state),
       canNavigateTo: (target: View) => canNavigateTo(state, target),
     },
     actions: {
@@ -66,14 +99,26 @@ export function useSessionFlow() {
       prepareTaskFromWidget(value: SessionTaskDraft) {
         dispatch({ type: "taskPreparedFromWidget", value });
       },
-      startSessionFromWidgetTask(value: SessionTaskDraft) {
-        dispatch({ type: "sessionStartedFromWidget", value });
+      async startSessionFromWidgetTask(value: SessionTaskDraft) {
+        const startAllowed = await prepareSessionStart(stateRef.current, value);
+
+        if (!startAllowed) {
+          return;
+        }
+
+        dispatch({ type: "sessionStartedFromWidget", value, settings: pomodoroSettings });
       },
       toggleStrictBlocking() {
         dispatch({ type: "strictBlockingToggled" });
       },
-      startSession() {
-        dispatch({ type: "sessionStarted" });
+      async startSession() {
+        const startAllowed = await prepareSessionStart(stateRef.current);
+
+        if (!startAllowed) {
+          return;
+        }
+
+        dispatch({ type: "sessionStarted", settings: pomodoroSettings });
       },
       togglePause() {
         dispatch({ type: "pauseToggled" });
@@ -92,6 +137,36 @@ export function useSessionFlow() {
       },
     },
   };
+
+  async function prepareSessionStart(
+    nextState: typeof state,
+    draft: SessionTaskDraft | null = null,
+  ) {
+    if (isSessionFlowLocked(nextState)) {
+      return false;
+    }
+
+    if (draft ? draft.title.trim().length === 0 : !isSessionPrepared(nextState)) {
+      return false;
+    }
+
+    const blockingResult = await prepareBlockingForSession(
+      nextState,
+      {
+        apply: applyWebBlocking,
+      },
+    );
+
+    if (blockingResult.ok) {
+      return true;
+    }
+
+    toast.error("ExecuNow could not arm web blocking for this session.", {
+      description: blockingResult.error,
+    });
+
+    return false;
+  }
 }
 
 function getActiveNavView(view: View): NavView {

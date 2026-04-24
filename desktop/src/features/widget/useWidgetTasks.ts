@@ -1,6 +1,7 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  consumeWidgetTask,
   createWidgetTask,
   getSelectedWidgetTask,
   insertWidgetTask,
@@ -28,6 +29,7 @@ import type {
 export function useWidgetTasks() {
   const windowLabel = getCurrentWindowLabel();
   const [state, setState] = useState<WidgetState>(() => readWidgetState());
+  const stateRef = useRef(state);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -43,7 +45,9 @@ export function useWidgetTasks() {
           return;
         }
 
-        setState(normalizeWidgetState(event.payload.state));
+        const normalizedState = normalizeWidgetState(event.payload.state);
+        stateRef.current = normalizedState;
+        setState(normalizedState);
       })
       .then((cleanup) => {
         if (disposed) {
@@ -63,6 +67,7 @@ export function useWidgetTasks() {
   function commit(nextState: WidgetState, broadcast = true) {
     const normalizedState = normalizeWidgetState(nextState);
 
+    stateRef.current = normalizedState;
     setState(normalizedState);
     writeWidgetState(normalizedState);
 
@@ -76,28 +81,39 @@ export function useWidgetTasks() {
     selectedTask: getSelectedWidgetTask(state),
     actions: {
       selectTask(taskId: string) {
-        commit(selectWidgetTask(state, taskId));
+        commit(selectWidgetTask(stateRef.current, taskId));
       },
       addTask(input: {
         title: string;
         estimateMinutes: number;
         priority: WidgetPriority;
+        tag?: string | null;
       }) {
         const task = createWidgetTask(input);
-        commit(insertWidgetTask(state, task));
+        commit(insertWidgetTask(stateRef.current, task));
         return task;
       },
       updateTask(taskId: string, updates: WidgetTaskUpdate) {
-        commit(updateWidgetTask(state, taskId, updates));
+        commit(updateWidgetTask(stateRef.current, taskId, updates));
       },
       removeTask(taskId: string) {
-        commit(removeWidgetTask(state, taskId));
+        commit(removeWidgetTask(stateRef.current, taskId));
       },
       toggleTaskCompleted(taskId: string) {
-        commit(toggleWidgetTaskCompleted(state, taskId));
+        commit(toggleWidgetTaskCompleted(stateRef.current, taskId));
       },
       replaceState(nextState: WidgetState) {
         commit(nextState);
+      },
+      consumeTask(taskId: string) {
+        const { task, nextState } = consumeWidgetTask(stateRef.current, taskId);
+
+        if (!task) {
+          return null;
+        }
+
+        commit(nextState);
+        return task;
       },
       consumeState(task: WidgetTask | null, nextState: WidgetState) {
         if (!task) {

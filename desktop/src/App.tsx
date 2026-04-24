@@ -1,9 +1,21 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useEffectEvent, useState } from "react";
 import { BlockingSettingsView } from "./features/blocking/BlockingSettingsView.tsx";
+import { useWebBlockingSettings } from "./features/blocking/useWebBlockingSettings.ts";
 import { AppShell } from "./features/shell/AppShell.tsx";
 import { Sidebar } from "./features/shell/Sidebar.tsx";
-import { Topbar } from "./features/shell/Topbar.tsx";
+import { getElapsedMinutes } from "./features/session/session.model.ts";
+import {
+  emitBrowserSessionWidgetUpdated,
+  emitSessionWidgetStateUpdated,
+  SESSION_WIDGET_CONTROL_EVENT,
+} from "./features/session/session-widget.events.ts";
+import {
+  createSessionWidgetSnapshot,
+  normalizeSessionWidgetControl,
+} from "./features/session/session-widget.model.ts";
+import { writeSessionWidgetSnapshot } from "./features/session/session-widget.storage.ts";
+import type { SessionWidgetControlPayload } from "./features/session/session-widget.types.ts";
 import { useSessionFlow } from "./features/session/useSessionFlow.ts";
 import { ActiveSessionView } from "./features/session/views/ActiveSessionView.tsx";
 import { HistoryView } from "./features/session/views/HistoryView.tsx";
@@ -12,16 +24,22 @@ import { OutcomeView } from "./features/session/views/OutcomeView.tsx";
 import { SettingsView } from "./features/session/views/SettingsView.tsx";
 import { SummaryView } from "./features/session/views/SummaryView.tsx";
 import { TasksView } from "./features/widget/TasksView.tsx";
+import { Toaster } from "./shared/components/ui/sonner.tsx";
 import {
   consumePendingWidgetAction,
   isTauriRuntime,
   MAIN_WINDOW_LABEL,
+  openSessionWidgetWindowFromMain,
   openStartupWidgetWindowFromMain,
+  showMainWindow,
 } from "./features/widget/widget.events.ts";
 
 function App() {
   const { state, derived, actions } = useSessionFlow();
+  const { settings: webBlockingSettings, addEntry, removeEntry } = useWebBlockingSettings();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const focusedMinutes = state.stats.focusMinutes + getElapsedMinutes(state);
+  const sessionWidgetSnapshot = createSessionWidgetSnapshot(state);
 
   const processPendingWidgetAction = useEffectEvent(() => {
     const pendingAction = consumePendingWidgetAction();
@@ -37,6 +55,23 @@ function App() {
 
     actions.startSessionFromWidgetTask(pendingAction.payload);
   });
+
+  const processSessionWidgetControl = useEffectEvent(
+    (payload: SessionWidgetControlPayload) => {
+      const control = normalizeSessionWidgetControl(payload.control);
+
+      if (!control) {
+        return;
+      }
+
+      if (control === "toggle-pause") {
+        actions.togglePause();
+        return;
+      }
+
+      void showMainWindow();
+    },
+  );
 
   useEffect(() => {
     if (!isTauriRuntime() || getCurrentWebviewWindow().label !== MAIN_WINDOW_LABEL) {
@@ -62,6 +97,63 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    writeSessionWidgetSnapshot(sessionWidgetSnapshot);
+    emitBrowserSessionWidgetUpdated(sessionWidgetSnapshot);
+    void emitSessionWidgetStateUpdated(sessionWidgetSnapshot, MAIN_WINDOW_LABEL);
+  }, [
+    sessionWidgetSnapshot.isPaused,
+    sessionWidgetSnapshot.pauseUsed,
+    sessionWidgetSnapshot.remainingSeconds,
+    sessionWidgetSnapshot.sessionPhase,
+    sessionWidgetSnapshot.sessionDuration,
+    sessionWidgetSnapshot.sessionTask,
+    sessionWidgetSnapshot.strictBlocking,
+    sessionWidgetSnapshot.view,
+  ]);
+
+  useEffect(() => {
+    if (!isTauriRuntime() || getCurrentWebviewWindow().label !== MAIN_WINDOW_LABEL) {
+      return;
+    }
+
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+
+    void getCurrentWebviewWindow()
+      .listen<SessionWidgetControlPayload>(
+        SESSION_WIDGET_CONTROL_EVENT,
+        (event) => {
+          if (event.payload.source === MAIN_WINDOW_LABEL) {
+            return;
+          }
+
+          processSessionWidgetControl(event.payload);
+        },
+      )
+      .then((cleanup) => {
+        if (disposed) {
+          cleanup();
+          return;
+        }
+
+        unlisten = cleanup;
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (state.view !== "outcome") {
+      return;
+    }
+
+    void showMainWindow();
+  }, [state.view]);
+
   let content = null;
 
   switch (state.view) {
@@ -71,18 +163,16 @@ function App() {
           taskTitle={state.taskTitle}
           selectedDuration={state.selectedDuration}
           strictBlocking={state.strictBlocking}
-          sessionPrepared={derived.sessionPrepared}
           history={state.history}
           onTaskTitleChange={actions.setTaskTitle}
-          onSuggestedTaskSelect={actions.setTaskTitle}
           onDurationSelect={actions.selectDuration}
           onStrictBlockingToggle={actions.toggleStrictBlocking}
-          onStartSession={actions.startSession}
+          onExecuteTask={actions.startSessionFromWidgetTask}
         />
       );
       break;
     case "tasks":
-      content = <TasksView />;
+      content = <TasksView onExecuteTask={actions.startSessionFromWidgetTask} />;
       break;
     case "history":
       content = <HistoryView history={state.history} />;
@@ -95,11 +185,18 @@ function App() {
         <ActiveSessionView
           remainingSeconds={state.remainingSeconds}
           sessionTask={state.sessionTask}
+          sessionDuration={state.sessionDuration}
+          sessionPomodoroSettings={state.sessionPomodoroSettings}
+          sessionPhase={state.sessionPhase}
+          sessionSegmentIndex={state.sessionSegmentIndex}
+          elapsedFocusSeconds={state.elapsedFocusSeconds}
+          focusedMinutes={focusedMinutes}
           isPaused={state.isPaused}
           pauseUsed={state.pauseUsed}
           strictBlocking={state.strictBlocking}
           onTogglePause={actions.togglePause}
           onCloseSession={actions.closeSession}
+          onOpenWidget={() => void openSessionWidgetWindowFromMain()}
         />
       );
       break;
@@ -122,6 +219,9 @@ function App() {
           strictBlocking={state.strictBlocking}
           sessionFlowLocked={derived.sessionFlowLocked}
           onStrictBlockingToggle={actions.toggleStrictBlocking}
+          entries={webBlockingSettings.entries}
+          onAddEntry={addEntry}
+          onRemoveEntry={removeEntry}
         />
       );
       break;
@@ -138,35 +238,37 @@ function App() {
       break;
   }
 
+  if (state.view === "active") {
+    return (
+      <>
+        {content}
+        <Toaster />
+      </>
+    );
+  }
+
   return (
-    <AppShell
-      isSessionMode={derived.isSessionMode}
-      isSidebarCollapsed={isSidebarCollapsed}
-      sidebar={
-        <Sidebar
-          navItems={derived.navItems}
-          activeView={derived.activeNav}
-          isCollapsed={isSidebarCollapsed}
-          canNavigateTo={derived.canNavigateTo}
-          onNavigate={actions.navigateTo}
-          onToggleCollapsed={() => setIsSidebarCollapsed((value) => !value)}
-        />
-      }
-      topbar={
-        <Topbar
-          currentLabel={
-            derived.navItems.find((item) => item.id === derived.activeNav)?.label ??
-            "Today"
-          }
-          statusLabel={derived.topbarStatusLabel}
-          onOpenWidget={
-            derived.sessionFlowLocked ? undefined : () => void openStartupWidgetWindowFromMain()
-          }
-        />
-      }
-    >
-      {content}
-    </AppShell>
+    <>
+      <AppShell
+        isSessionMode={derived.isSessionMode}
+        isSidebarCollapsed={isSidebarCollapsed}
+        sidebar={
+          <Sidebar
+            navItems={derived.navItems}
+            activeView={derived.activeNav}
+            isCollapsed={isSidebarCollapsed}
+            canNavigateTo={derived.canNavigateTo}
+            isWidgetActionDisabled={derived.sessionFlowLocked}
+            onNavigate={actions.navigateTo}
+            onOpenWidget={() => void openStartupWidgetWindowFromMain()}
+            onToggleCollapsed={() => setIsSidebarCollapsed((value) => !value)}
+          />
+        }
+      >
+        {content}
+      </AppShell>
+      <Toaster />
+    </>
   );
 }
 

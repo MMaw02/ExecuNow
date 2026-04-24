@@ -1,3 +1,8 @@
+import type {
+  PomodoroSessionPhase,
+  PomodoroSettings,
+} from "../pomodoro/pomodoro.types.ts";
+
 export type NavView = "today" | "tasks" | "history" | "summary" | "blocking" | "settings";
 export type View = NavView | "active" | "outcome";
 export type DurationOption = number;
@@ -34,6 +39,10 @@ export type SessionState = {
   strictBlocking: boolean;
   sessionTask: string;
   sessionDuration: DurationOption;
+  sessionPomodoroSettings: PomodoroSettings;
+  sessionPhase: PomodoroSessionPhase;
+  sessionSegmentIndex: number;
+  elapsedFocusSeconds: number;
   remainingSeconds: number;
   isPaused: boolean;
   pauseUsed: boolean;
@@ -47,10 +56,14 @@ export type SessionAction =
   | { type: "taskTitleChanged"; value: string }
   | { type: "durationSelected"; value: DurationOption }
   | { type: "taskPreparedFromWidget"; value: SessionTaskDraft }
-  | { type: "sessionStartedFromWidget"; value: SessionTaskDraft }
+  | {
+      type: "sessionStartedFromWidget";
+      value: SessionTaskDraft;
+      settings: PomodoroSettings;
+    }
   | { type: "strictBlockingToggled" }
   | { type: "navigated"; value: View }
-  | { type: "sessionStarted" }
+  | { type: "sessionStarted"; settings: PomodoroSettings }
   | { type: "pauseToggled" }
   | { type: "sessionClosed"; value: SessionOutcome }
   | { type: "sessionResultSelected"; value: SessionOutcome }

@@ -7,6 +7,7 @@ import type {
 } from "./widget.types.ts";
 
 export const MIN_WIDGET_ESTIMATE_MINUTES = MIN_CUSTOM_DURATION;
+export type WidgetTaskFilter = "all" | "planned" | "completed";
 
 const PRIORITY_WEIGHT: Record<Exclude<WidgetPriority, null>, number> = {
   high: 0,
@@ -39,8 +40,12 @@ export function normalizeWidgetState(
             task.estimateMinutes >= MIN_WIDGET_ESTIMATE_MINUTES &&
             typeof task.completed === "boolean" &&
             typeof task.createdAt === "string" &&
+            (task.tag === undefined || task.tag === null || typeof task.tag === "string") &&
             (task.priority === null || isWidgetPriority(task.priority)),
-        ),
+        ).map((task) => ({
+          ...task,
+          tag: normalizeWidgetTag(task.tag),
+        })),
       )
     : [];
   const selectedTaskId =
@@ -76,6 +81,7 @@ export function createWidgetTask(
     title: string;
     estimateMinutes: number;
     priority: WidgetPriority;
+    tag?: string | null;
   },
   options: {
     id?: string;
@@ -92,6 +98,7 @@ export function createWidgetTask(
     title: input.title.trim(),
     estimateMinutes,
     priority: input.priority,
+    tag: normalizeWidgetTag(input.tag),
     completed: false,
     createdAt: options.createdAt ?? new Date().toISOString(),
   };
@@ -148,8 +155,42 @@ export function consumeSelectedWidgetTask(state: WidgetState): {
   };
 }
 
+export function consumeWidgetTask(
+  state: WidgetState,
+  taskId: string,
+): {
+  task: WidgetTask | null;
+  nextState: WidgetState;
+} {
+  const task = state.tasks.find((entry) => entry.id === taskId) ?? null;
+
+  if (!task) {
+    return {
+      task: null,
+      nextState: state,
+    };
+  }
+
+  const tasks = state.tasks.filter((entry) => entry.id !== taskId);
+  const selectedTaskId = tasks.some((entry) => entry.id === state.selectedTaskId)
+    ? state.selectedTaskId
+    : tasks[0]?.id ?? null;
+
+  return {
+    task,
+    nextState: {
+      tasks,
+      selectedTaskId,
+    },
+  };
+}
+
 export function isWidgetDraftValid(title: string, estimateMinutes: number | null): boolean {
-  return title.trim().length > 0 && estimateMinutes !== null && estimateMinutes >= MIN_WIDGET_ESTIMATE_MINUTES;
+  return (
+    title.trim().length > 0 &&
+    estimateMinutes !== null &&
+    estimateMinutes >= MIN_WIDGET_ESTIMATE_MINUTES
+  );
 }
 
 export function updateWidgetTask(
@@ -172,6 +213,7 @@ export function updateWidgetTask(
               MIN_WIDGET_ESTIMATE_MINUTES,
             ),
             priority: updates.priority,
+            tag: normalizeWidgetTag(updates.tag),
             completed: updates.completed ?? task.completed,
           }
         : task,
@@ -228,10 +270,34 @@ export function toggleWidgetTaskCompleted(
   };
 }
 
+export function filterWidgetTasks(
+  tasks: readonly WidgetTask[],
+  filter: WidgetTaskFilter,
+) {
+  if (filter === "planned") {
+    return tasks.filter((task) => !task.completed);
+  }
+
+  if (filter === "completed") {
+    return tasks.filter((task) => task.completed);
+  }
+
+  return [...tasks];
+}
+
 function getPriorityWeight(priority: WidgetPriority): number {
   if (priority === null) {
     return 3;
   }
 
   return PRIORITY_WEIGHT[priority];
+}
+
+function normalizeWidgetTag(tag: string | null | undefined) {
+  if (typeof tag !== "string") {
+    return null;
+  }
+
+  const normalizedTag = tag.trim();
+  return normalizedTag.length > 0 ? normalizedTag : null;
 }

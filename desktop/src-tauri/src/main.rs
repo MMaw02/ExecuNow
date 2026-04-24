@@ -2,5 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    if let Some(exit_code) = workspacesexecunowdesktop_lib::blocking::maybe_handle_helper_mode() {
+        std::process::exit(exit_code);
+    }
+
     workspacesexecunowdesktop_lib::run()
 }

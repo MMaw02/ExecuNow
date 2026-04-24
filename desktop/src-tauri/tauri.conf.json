@@ -1,19 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "workspacesexecunowdesktop",
+  "productName": "ExecuNow",
   "version": "0.1.0",
   "identifier": "com.node.workspacesexecunowdesktop",
   "build": {
-    "beforeDevCommand": "yarn dev",
+    "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "yarn build",
+    "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "workspacesexecunowdesktop",
+        "title": "ExecuNow",
         "visible": false,
         "width": 800,
         "height": 600

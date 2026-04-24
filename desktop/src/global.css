@@ -19,6 +19,25 @@
   --radius-medium: 9px;
   --radius-small: 8px;
   --shadow-soft: 0 24px 48px rgba(0, 0, 0, 0.22);
+  --background: var(--base-deep);
+  --foreground: var(--text-primary);
+  --card: rgba(10, 29, 56, 0.86);
+  --card-foreground: var(--text-primary);
+  --popover: rgba(6, 25, 48, 0.96);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-primary);
+  --primary-foreground: #ffffff;
+  --secondary: rgba(17, 49, 93, 0.66);
+  --secondary-foreground: var(--text-primary);
+  --muted: rgba(255, 255, 255, 0.035);
+  --muted-foreground: var(--text-secondary);
+  --accent: rgba(255, 255, 255, 0.055);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--accent-warning);
+  --destructive-foreground: #ffffff;
+  --border: var(--border-subtle);
+  --input: rgba(140, 170, 222, 0.2);
+  --ring: rgba(25, 120, 229, 0.55);
 }
 
 @theme inline {
@@ -37,6 +56,25 @@
   --color-accent-support: var(--accent-support);
   --color-accent-success: var(--accent-success);
   --color-accent-warning: var(--accent-warning);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
 
 @layer base {
@@ -59,8 +97,8 @@
     font-family: var(--font-sans);
     line-height: 1.5;
     font-weight: 400;
-    color: var(--text-primary);
-    background: var(--base-deep);
+    color: var(--foreground);
+    background: var(--background);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -70,7 +108,8 @@
 
   button,
   input,
-  select {
+  select,
+  textarea {
     font: inherit;
   }
 
@@ -86,6 +125,12 @@
   }
 
   body.window-startup-widget {
+    background:
+      linear-gradient(180deg, rgba(13, 38, 72, 0.98), rgba(4, 17, 36, 0.98)),
+      var(--base-deep);
+  }
+
+  body.window-session-widget {
     background: transparent;
   }
 }

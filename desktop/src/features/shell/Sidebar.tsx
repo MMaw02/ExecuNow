@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  AppWindow,
   ChartColumn,
   History,
   House,
@@ -9,7 +10,15 @@ import {
   Settings,
   Shield,
 } from "lucide-react";
+import { Badge } from "../../shared/components/ui/badge.tsx";
 import { Button } from "../../shared/components/ui/button.tsx";
+import { Separator } from "../../shared/components/ui/separator.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../../shared/components/ui/tooltip.tsx";
 import { cn } from "../../shared/lib/cn.ts";
 import type {
   NavigationItem,
@@ -22,7 +31,9 @@ type SidebarProps = {
   activeView: NavView;
   isCollapsed: boolean;
   canNavigateTo: (target: View) => boolean;
+  isWidgetActionDisabled: boolean;
   onNavigate: (target: NavView) => void;
+  onOpenWidget: () => void;
   onToggleCollapsed: () => void;
 };
 
@@ -40,19 +51,21 @@ export function Sidebar({
   activeView,
   isCollapsed,
   canNavigateTo,
+  isWidgetActionDisabled,
   onNavigate,
+  onOpenWidget,
   onToggleCollapsed,
 }: SidebarProps) {
   const primaryItems = navItems.filter((item) => item.id !== "settings");
   const settingsItem = navItems.find((item) => item.id === "settings");
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-10 grid w-[var(--sidebar-width)] grid-rows-[auto_1fr_auto] overflow-y-auto rounded-r-[16px] border-r border-border-subtle bg-[rgba(7,24,46,0.9)] px-3 pb-3 pt-4 shadow-[var(--shadow-soft)] backdrop-blur-sm transition-[width,padding] duration-200">
-      <div className="grid gap-3.5 border-b border-border-subtle px-1 pb-3">
+    <aside className="fixed inset-y-0 left-0 z-20 flex w-[var(--sidebar-width)] flex-col border-r border-border bg-popover/95 px-3 pb-3 pt-4 shadow-[var(--shadow-soft)] backdrop-blur-sm transition-[width] duration-200">
+      <div className="flex flex-col gap-3 px-1">
         <Button
-          variant="secondary"
+          variant="outline"
           size="icon"
-          className="justify-self-start bg-surface-subtle/75 text-text-secondary"
+          className="justify-self-start border-border bg-card text-muted-foreground"
           onClick={onToggleCollapsed}
           aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -64,51 +77,129 @@ export function Sidebar({
           )}
         </Button>
 
-        <div className="grid min-h-9 grid-flow-col items-center gap-3">
+        <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
           <span
-            className="h-3 w-3 rounded-full bg-accent-success shadow-[0_0_0_4px_rgba(78,222,163,0.14)]"
+            className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(78,222,163,0.12)]"
             aria-hidden="true"
           />
-          {!isCollapsed && (
+          {!isCollapsed ? (
             <div className="grid gap-0.5">
-              <strong className="text-[0.96rem] leading-none tracking-[0.12em] text-text-primary">
+              <strong className="text-[0.96rem] leading-none tracking-[0.12em] text-foreground">
                 EXECUNOW
               </strong>
-              <span className="text-[0.68rem] uppercase leading-none tracking-[0.14em] text-text-secondary">
+              <span className="text-[0.68rem] uppercase leading-none tracking-[0.14em] text-muted-foreground">
                 Peak performance
               </span>
             </div>
-          )}
+          ) : null}
         </div>
+
+        {!isCollapsed ? (
+          <Badge variant="success" className="w-fit">
+            Ready
+          </Badge>
+        ) : null}
       </div>
 
-      <nav className="grid content-start gap-2 pt-3.5" aria-label="Primary navigation">
-        {primaryItems.map((item) => (
-          <SidebarItem
-            key={item.id}
-            item={item}
-            icon={ICONS[item.id]}
-            activeView={activeView}
-            isCollapsed={isCollapsed}
-            disabled={!canNavigateTo(item.id)}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </nav>
+      <Separator className="my-4" />
 
-      {settingsItem ? (
-        <div className="mt-auto border-t border-border-subtle pt-3.5">
-          <SidebarItem
-            item={settingsItem}
-            icon={ICONS.settings}
-            activeView={activeView}
+      <TooltipProvider delayDuration={120}>
+        <nav className="grid content-start gap-2" aria-label="Primary navigation">
+          {primaryItems.map((item) => (
+            <SidebarItem
+              key={item.id}
+              item={item}
+              icon={ICONS[item.id]}
+              activeView={activeView}
+              isCollapsed={isCollapsed}
+              disabled={!canNavigateTo(item.id)}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </nav>
+
+        <div className="mt-auto grid gap-4">
+          <Separator />
+          <SidebarWidgetLauncher
             isCollapsed={isCollapsed}
-            disabled={!canNavigateTo(settingsItem.id)}
-            onNavigate={onNavigate}
+            disabled={isWidgetActionDisabled}
+            onOpenWidget={onOpenWidget}
           />
+          {settingsItem ? (
+            <>
+              <Separator />
+              <SidebarItem
+                item={settingsItem}
+                icon={ICONS.settings}
+                activeView={activeView}
+                isCollapsed={isCollapsed}
+                disabled={!canNavigateTo(settingsItem.id)}
+                onNavigate={onNavigate}
+              />
+            </>
+          ) : null}
         </div>
-      ) : null}
+      </TooltipProvider>
     </aside>
+  );
+}
+
+type SidebarWidgetLauncherProps = {
+  isCollapsed: boolean;
+  disabled: boolean;
+  onOpenWidget: () => void;
+};
+
+function SidebarWidgetLauncher({
+  isCollapsed,
+  disabled,
+  onOpenWidget,
+}: SidebarWidgetLauncherProps) {
+  const title = "Open focus widget";
+  const helperCopy = disabled
+    ? "Available after you finish the current focus flow."
+    : "Keep quick tasks and launch controls close by.";
+
+  const launcherButton = (
+    <Button
+      variant={isCollapsed ? "outline" : "secondary"}
+      size={isCollapsed ? "icon" : "default"}
+      className={cn(
+        "shrink-0",
+        isCollapsed
+          ? "border-border bg-card text-muted-foreground"
+          : "w-full justify-start bg-secondary/70 text-secondary-foreground hover:bg-secondary",
+      )}
+      onClick={onOpenWidget}
+      disabled={disabled}
+      aria-label={title}
+    >
+      <AppWindow size={18} strokeWidth={2.1} aria-hidden="true" />
+      {!isCollapsed ? <span>Open focus widget</span> : null}
+    </Button>
+  );
+
+  if (isCollapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{launcherButton}</TooltipTrigger>
+        <TooltipContent side="right">
+          {disabled ? "Focus widget available after the current session." : title}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 rounded-[var(--radius-medium)] border border-border bg-muted/30 p-3">
+      <div className="grid gap-1">
+        <span className="text-[0.68rem] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Quick access
+        </span>
+        <p className="text-sm text-muted-foreground">{helperCopy}</p>
+      </div>
+      {launcherButton}
+    </div>
   );
 }
 
@@ -129,28 +220,34 @@ function SidebarItem({
   disabled,
   onNavigate,
 }: SidebarItemProps) {
-  return (
+  const itemButton = (
     <Button
       variant="ghost"
-      size="default"
-      active={item.id === activeView}
       className={cn(
-        "grid w-full items-center gap-3 text-left",
-        isCollapsed
-          ? "grid-cols-1 justify-items-center px-0"
-          : "grid-cols-[18px_minmax(0,1fr)] px-3.5",
-        item.id !== activeView &&
-          "border-transparent bg-transparent text-text-secondary",
-        disabled && "opacity-35",
+        "h-10 w-full justify-start gap-3 rounded-[var(--radius-small)] px-3 text-left text-muted-foreground",
+        isCollapsed && "justify-center px-0",
+        item.id === activeView &&
+          "bg-primary/12 text-primary hover:bg-primary/14 hover:text-primary",
+        item.id !== activeView && "hover:bg-accent hover:text-accent-foreground",
       )}
       onClick={() => onNavigate(item.id)}
       disabled={disabled}
       aria-current={item.id === activeView ? "page" : undefined}
       aria-label={item.label}
-      title={isCollapsed ? item.label : undefined}
     >
       <Icon size={18} strokeWidth={2.1} aria-hidden="true" />
-      {!isCollapsed && <span>{item.label}</span>}
+      {!isCollapsed ? <span className="truncate">{item.label}</span> : null}
     </Button>
+  );
+
+  if (!isCollapsed) {
+    return itemButton;
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{itemButton}</TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
   );
 }

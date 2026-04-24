@@ -1,4 +1,9 @@
 import { DURATIONS } from "./session.constants.ts";
+import {
+  DEFAULT_POMODORO_SETTINGS,
+  getPomodoroSessionTimeline,
+  normalizePomodoroSettings,
+} from "../pomodoro/pomodoro.model.ts";
 import type {
   SessionAction,
   SessionOutcome,
@@ -26,6 +31,10 @@ export function createInitialSessionState(): SessionState {
     strictBlocking: true,
     sessionTask: "",
     sessionDuration: DEFAULT_DURATION,
+    sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+    sessionPhase: "focus",
+    sessionSegmentIndex: 0,
+    elapsedFocusSeconds: 0,
     remainingSeconds: DEFAULT_DURATION * 60,
     isPaused: false,
     pauseUsed: false,
@@ -63,6 +72,9 @@ export function sessionReducer(
         selectedDuration: draft.duration,
         sessionTask: "",
         sessionDuration: draft.duration,
+        sessionPhase: "focus",
+        sessionSegmentIndex: 0,
+        elapsedFocusSeconds: 0,
         remainingSeconds: draft.duration * 60,
         isPaused: false,
         pauseUsed: false,
@@ -72,6 +84,8 @@ export function sessionReducer(
     }
     case "sessionStartedFromWidget": {
       const draft = normalizeSessionTaskDraft(action.value);
+      const sessionPomodoroSettings = normalizePomodoroSettings(action.settings);
+      const timeline = getPomodoroSessionTimeline(draft.duration, sessionPomodoroSettings);
 
       return {
         ...state,
@@ -80,7 +94,11 @@ export function sessionReducer(
         selectedDuration: draft.duration,
         sessionTask: draft.title,
         sessionDuration: draft.duration,
-        remainingSeconds: draft.duration * 60,
+        sessionPomodoroSettings,
+        sessionPhase: timeline.segments[0]?.phase ?? "focus",
+        sessionSegmentIndex: 0,
+        elapsedFocusSeconds: 0,
+        remainingSeconds: timeline.segments[0]?.durationSeconds ?? draft.duration * 60,
         isPaused: false,
         pauseUsed: false,
         sessionResult: null,
@@ -101,22 +119,31 @@ export function sessionReducer(
         ...state,
         view: action.value,
       };
-    case "sessionStarted":
+    case "sessionStarted": {
       if (!isSessionPrepared(state)) {
         return state;
       }
+
+      const sessionPomodoroSettings = normalizePomodoroSettings(action.settings);
+      const timeline = getPomodoroSessionTimeline(state.selectedDuration, sessionPomodoroSettings);
 
       return {
         ...state,
         view: "active",
         sessionTask: state.taskTitle.trim(),
         sessionDuration: state.selectedDuration,
-        remainingSeconds: state.selectedDuration * 60,
+        sessionPomodoroSettings,
+        sessionPhase: timeline.segments[0]?.phase ?? "focus",
+        sessionSegmentIndex: 0,
+        elapsedFocusSeconds: 0,
+        remainingSeconds:
+          timeline.segments[0]?.durationSeconds ?? state.selectedDuration * 60,
         isPaused: false,
         pauseUsed: false,
         sessionResult: null,
         failureReason: "",
       };
+    }
     case "pauseToggled":
       if (state.view !== "active") {
         return state;
@@ -169,6 +196,10 @@ export function sessionReducer(
         taskTitle: "",
         sessionTask: "",
         sessionDuration: state.selectedDuration,
+        sessionPomodoroSettings: state.sessionPomodoroSettings,
+        sessionPhase: "focus",
+        sessionSegmentIndex: 0,
+        elapsedFocusSeconds: 0,
         remainingSeconds: state.selectedDuration * 60,
         isPaused: false,
         pauseUsed: false,
@@ -182,17 +213,46 @@ export function sessionReducer(
         },
         history: [sessionRecord, ...state.history].slice(0, 24),
       };
-    case "tick":
+    case "tick": {
       if (state.view !== "active" || state.isPaused) {
         return state;
       }
 
-      const remainingSeconds = Math.max(state.remainingSeconds - 1, 0);
+      const timeline = getPomodoroSessionTimeline(
+        state.sessionDuration,
+        state.sessionPomodoroSettings,
+      );
+      const currentSegment = timeline.segments[state.sessionSegmentIndex];
 
-      if (remainingSeconds === 0) {
+      if (!currentSegment) {
         return {
           ...state,
-          remainingSeconds,
+          view: "outcome",
+          sessionResult: "completed",
+          isPaused: false,
+          remainingSeconds: 0,
+        };
+      }
+
+      const nextRemainingSeconds = Math.max(state.remainingSeconds - 1, 0);
+      const elapsedFocusSeconds =
+        state.elapsedFocusSeconds + (currentSegment.phase === "focus" ? 1 : 0);
+
+      if (nextRemainingSeconds > 0) {
+        return {
+          ...state,
+          elapsedFocusSeconds,
+          remainingSeconds: nextRemainingSeconds,
+        };
+      }
+
+      const nextSegment = timeline.segments[state.sessionSegmentIndex + 1];
+
+      if (!nextSegment) {
+        return {
+          ...state,
+          elapsedFocusSeconds,
+          remainingSeconds: 0,
           view: "outcome",
           sessionResult: "completed",
           isPaused: false,
@@ -201,8 +261,12 @@ export function sessionReducer(
 
       return {
         ...state,
-        remainingSeconds,
+        elapsedFocusSeconds,
+        sessionPhase: nextSegment.phase,
+        sessionSegmentIndex: state.sessionSegmentIndex + 1,
+        remainingSeconds: nextSegment.durationSeconds,
       };
+    }
     default:
       return assertNever(action);
   }
@@ -241,28 +305,7 @@ export function canNavigateTo(
 }
 
 export function getElapsedMinutes(state: SessionState) {
-  return Math.max(
-    state.sessionDuration - Math.ceil(state.remainingSeconds / 60),
-    0,
-  );
-}
-
-export function getTopbarStatusLabel(
-  state: Pick<SessionState, "view" | "isPaused" | "strictBlocking">,
-) {
-  if (state.isPaused) {
-    return "Paused";
-  }
-
-  if (state.view === "active") {
-    return state.strictBlocking ? "Session live - strict" : "Session live";
-  }
-
-  if (state.view === "outcome") {
-    return "Log outcome";
-  }
-
-  return state.strictBlocking ? "Blocking armed" : "Blocking relaxed";
+  return Math.max(Math.floor(state.elapsedFocusSeconds / 60), 0);
 }
 
 function createSessionRecord(state: SessionState): SessionRecord {

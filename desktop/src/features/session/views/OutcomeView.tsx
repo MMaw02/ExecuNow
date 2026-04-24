@@ -1,3 +1,17 @@
+import { Button } from "../../../shared/components/ui/button.tsx";
+import { Card, CardContent } from "../../../shared/components/ui/card.tsx";
+import { Label } from "../../../shared/components/ui/label.tsx";
+import { ToggleGroup, ToggleGroupItem } from "../../../shared/components/ui/toggle-group.tsx";
+import {
+  eyebrowClassName,
+  metricCellClassName,
+  metricGridClassName,
+  pageClassName,
+  pageCopyClassName,
+  pageHeaderClassName,
+  pageTitleClassName,
+  summaryLabelClassName,
+} from "../../../shared/components/ui/styles.ts";
 import { FAILURE_REASONS } from "../session.constants.ts";
 import type {
   SessionOutcome,
@@ -25,77 +39,85 @@ export function OutcomeView({
   onSaveOutcome,
 }: OutcomeViewProps) {
   return (
-    <section className="page outcome-page">
-      <header className="page-header page-header-tight">
-        <p className="eyebrow">Outcome</p>
-        <h1 className="page-title">Close the loop.</h1>
-        <p className="page-copy">{sessionTask || "Last session"}</p>
+    <section className={pageClassName}>
+      <header className={pageHeaderClassName}>
+        <p className={eyebrowClassName}>Outcome</p>
+        <h1 className={pageTitleClassName}>Close the loop.</h1>
+        <p className={pageCopyClassName}>{sessionTask || "Last session"}</p>
       </header>
 
-      <div className="outcome-stack">
-        <div className="result-grid" role="radiogroup" aria-label="Session result">
-          {(["completed", "incomplete", "abandoned"] as const).map((result) => (
-            <button
-              key={result}
-              type="button"
-              className={sessionResult === result ? "result-button active" : "result-button"}
-              onClick={() => onSessionResultSelect(result)}
-            >
-              {formatOutcomeLabel(result)}
-            </button>
-          ))}
-        </div>
+      <Card className="bg-card/92">
+        <CardContent className="grid gap-5 pt-5">
+          <ToggleGroup
+            type="single"
+            value={sessionResult ?? ""}
+            onValueChange={(value) => {
+              if (value === "completed" || value === "incomplete" || value === "abandoned") {
+                onSessionResultSelect(value);
+              }
+            }}
+            className="grid gap-3 md:grid-cols-3"
+          >
+            {(["completed", "incomplete", "abandoned"] as const).map((result) => (
+              <ToggleGroupItem
+                key={result}
+                value={result}
+                className="h-11 justify-center"
+                aria-label={formatOutcomeLabel(result)}
+              >
+                {formatOutcomeLabel(result)}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
 
-        {sessionResult && sessionResult !== "completed" && (
-          <div className="stack">
-            <span className="field-label">Why did execution break?</span>
-            <div className="suggestion-list">
-              {FAILURE_REASONS.map((reason) => (
-                <button
-                  key={reason}
-                  type="button"
-                  className={
-                    failureReason === reason
-                      ? "suggestion-button active"
-                      : "suggestion-button"
-                  }
-                  onClick={() => onFailureReasonSelect(reason)}
-                >
-                  {reason}
-                </button>
-              ))}
+          {sessionResult && sessionResult !== "completed" ? (
+            <div className="grid gap-3">
+              <Label>Why did execution break?</Label>
+              <div className="flex flex-wrap gap-2">
+                {FAILURE_REASONS.map((reason) => (
+                  <Button
+                    key={reason}
+                    variant={failureReason === reason ? "default" : "secondary"}
+                    size="sm"
+                    onClick={() => onFailureReasonSelect(reason)}
+                  >
+                    {reason}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          ) : null}
 
-        <button
-          type="button"
-          className="primary-button"
-          onClick={onSaveOutcome}
-          disabled={
-            !sessionResult ||
-            (sessionResult !== "completed" && failureReason.length === 0)
-          }
-        >
-          Save outcome
-        </button>
-      </div>
+          <Button
+            variant="default"
+            size="lg"
+            className="w-full md:w-auto"
+            onClick={onSaveOutcome}
+            disabled={
+              !sessionResult ||
+              (sessionResult !== "completed" && failureReason.length === 0)
+            }
+          >
+            Save outcome
+          </Button>
+        </CardContent>
+      </Card>
 
-      <div className="metric-grid">
-        <div className="metric-cell">
-          <span className="summary-label">Completed</span>
+      <div className={metricGridClassName}>
+        <div className={metricCellClassName}>
+          <span className={summaryLabelClassName}>Completed</span>
           <strong>{stats.completed}</strong>
         </div>
-        <div className="metric-cell">
-          <span className="summary-label">Incomplete</span>
+        <div className={metricCellClassName}>
+          <span className={summaryLabelClassName}>Incomplete</span>
           <strong>{stats.incomplete}</strong>
         </div>
-        <div className="metric-cell">
-          <span className="summary-label">Abandoned</span>
+        <div className={metricCellClassName}>
+          <span className={summaryLabelClassName}>Abandoned</span>
           <strong>{stats.abandoned}</strong>
         </div>
-        <div className="metric-cell">
-          <span className="summary-label">Focus</span>
+        <div className={metricCellClassName}>
+          <span className={summaryLabelClassName}>Focus</span>
           <strong>{stats.focusMinutes} min</strong>
         </div>
       </div>

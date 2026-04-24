@@ -15,6 +15,7 @@ export type WidgetPendingAction =
 
 export const MAIN_WINDOW_LABEL = "main";
 export const STARTUP_WIDGET_WINDOW_LABEL = "startup-widget";
+export const SESSION_WIDGET_WINDOW_LABEL = "session-widget";
 export const WIDGET_START_TASK_EVENT = "widget:start-task";
 export const WIDGET_OPEN_TASKS_EVENT = "widget:open-tasks";
 export const WIDGET_TASKS_UPDATED_EVENT = "widget:tasks-updated";
@@ -37,6 +38,10 @@ export async function emitWidgetTasksUpdated(state: WidgetState, source: string)
 }
 
 export async function bringMainWindowToFront() {
+  await showMainWindow();
+}
+
+export async function showMainWindow() {
   if (!isTauriRuntime()) {
     return;
   }
@@ -92,6 +97,34 @@ export async function openStartupWidgetWindowFromMain() {
   }
 
   await invoke("show_widget_window");
+}
+
+export async function openSessionWidgetWindowFromMain() {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  await invoke("show_session_widget_window");
+}
+
+export async function hideSessionWidgetWindow() {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  await invoke("hide_session_widget_window");
+}
+
+export async function startWidgetWindowDrag() {
+  if (!isTauriRuntime()) {
+    return;
+  }
+
+  await invoke("start_widget_window_drag");
+}
+
+export async function startStartupWidgetDrag() {
+  await startWidgetWindowDrag();
 }
 
 export function toWidgetTransferPayload(task: {
