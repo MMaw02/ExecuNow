@@ -100,6 +100,10 @@ export function createSessionWidgetSnapshotChannel(
       });
     },
     subscribeSnapshot(source, onSnapshot) {
+      if (typeof window === "undefined") {
+        return () => {};
+      }
+
       function handleBrowserUpdated(event: Event) {
         const payload = (event as CustomEvent<SessionWidgetStateUpdatedPayload>).detail;
 
@@ -158,6 +162,10 @@ export function createSessionWidgetSnapshotChannel(
       };
     },
     subscribeControl(source, onControl) {
+      if (typeof window === "undefined") {
+        return () => {};
+      }
+
       function handleBrowserControl(event: Event) {
         const payload = (event as CustomEvent<SessionWidgetControlPayload>).detail;
         const control = normalizeSessionWidgetControl(payload?.control);

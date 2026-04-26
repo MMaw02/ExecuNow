@@ -263,7 +263,7 @@ pub fn reinforce_session_widget_z_order(
         window,
         config.always_on_top,
         config.visible_on_all_workspaces,
-        force_focus,
+        allow_session_widget_focus(&config, force_focus),
     )
 }
 
@@ -308,7 +308,7 @@ pub fn show_session_widget_window(app: &AppHandle) -> Result<(), String> {
         &widget_window,
         config.always_on_top,
         config.visible_on_all_workspaces,
-        true,
+        allow_session_widget_focus(&config, true),
     )?;
     main_window.hide().map_err(|error| error.to_string())?;
 
@@ -482,6 +482,17 @@ fn build_session_widget_profile(config: &AuxiliaryWindowConfig) -> SessionWidget
             }),
         transparent_window: config.transparent,
     }
+}
+
+fn allow_session_widget_focus(
+    config: &AuxiliaryWindowConfig,
+    requested_focus: bool,
+) -> bool {
+    requested_focus
+        && !matches!(
+            config.focus_policy,
+            Some(SessionWidgetFocusPolicy::Passive)
+        )
 }
 
 fn reinforce_widget_priority(
