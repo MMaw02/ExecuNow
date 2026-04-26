@@ -6,6 +6,7 @@ $releaseRoot = Join-Path $projectRoot "release"
 $portableDir = Join-Path $releaseRoot "ExecuNow"
 $portableConfigDir = Join-Path $portableDir "config\widgets"
 $zipPath = Join-Path $releaseRoot "ExecuNow-portable-windows.zip"
+$buildLogPath = Join-Path $releaseRoot "windows-portable-build.log"
 $sourceExeCandidates = @(
   (Join-Path $projectRoot "src-tauri\target\release\ExecuNow.exe"),
   (Join-Path $projectRoot "src-tauri\target\release\workspacesexecunowdesktop.exe")
@@ -102,10 +103,28 @@ function Find-VsDevCmd {
 }
 
 function Invoke-TauriPortableBuild {
+  param(
+    [string]$BuildLogPath
+  )
+
   $linkExe = Get-Command "link.exe" -ErrorAction SilentlyContinue
 
+  if ($BuildLogPath) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $BuildLogPath) | Out-Null
+
+    if (Test-Path $BuildLogPath) {
+      Remove-Item -Force $BuildLogPath
+    }
+  }
+
   if ($linkExe) {
-    pnpm tauri build --no-bundle
+    if ($BuildLogPath) {
+      & pnpm tauri build --no-bundle 2>&1 | Tee-Object -FilePath $BuildLogPath
+    }
+    else {
+      pnpm tauri build --no-bundle
+    }
+
     return $LASTEXITCODE
   }
 
@@ -134,7 +153,13 @@ pnpm tauri build --no-bundle
 exit /b %errorlevel%
 "@
 
-    & cmd.exe /d /s /c "`"$cmdFile`""
+    if ($BuildLogPath) {
+      & cmd.exe /d /s /c "`"$cmdFile`"" 2>&1 | Tee-Object -FilePath $BuildLogPath
+    }
+    else {
+      & cmd.exe /d /s /c "`"$cmdFile`""
+    }
+
     return $LASTEXITCODE
   }
   finally {
@@ -148,6 +173,8 @@ Push-Location $projectRoot
 try {
   Stop-ExecuNowProjectProcesses
 
+  New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
+
   $lockedSourceExe = $sourceExeCandidates | Where-Object { !(Test-FileIsWritable $_) } | Select-Object -First 1
 
   if ($lockedSourceExe) {
@@ -160,10 +187,17 @@ then run pnpm build:windows:portable again.
 "@
   }
 
-  $buildExitCode = Invoke-TauriPortableBuild
+  $buildExitCode = Invoke-TauriPortableBuild -BuildLogPath $buildLogPath
 
   if ($buildExitCode -ne 0) {
-    throw "Tauri build failed. Portable package was not created."
+    throw @"
+Tauri build failed with exit code $buildExitCode. Portable package was not created.
+
+Review the build log for the root cause:
+$buildLogPath
+
+If the console output was truncated, open that file and look for the first error above the final summary.
+"@
   }
 
   $sourceExe = $sourceExeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -171,8 +205,6 @@ then run pnpm build:windows:portable again.
   if (!$sourceExe) {
     throw "Expected Windows executable was not found in src-tauri\target\release"
   }
-
-  New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
 
   if (Test-Path $portableDir) {
     Remove-Item -Recurse -Force $portableDir
