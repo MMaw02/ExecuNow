@@ -12,6 +12,70 @@ $sourceExeCandidates = @(
 )
 $portableExe = Join-Path $portableDir "ExecuNow.exe"
 
+function Get-NormalizedPath([string]$path) {
+  if (!$path) {
+    return $null
+  }
+
+  try {
+    return [System.IO.Path]::GetFullPath($path)
+  }
+  catch {
+    return $path
+  }
+}
+
+function Stop-ExecuNowProjectProcesses {
+  $projectRootNormalized = Get-NormalizedPath $projectRoot
+  $candidatePrefixes = @(
+    (Get-NormalizedPath (Join-Path $projectRoot "src-tauri\target\release")),
+    (Get-NormalizedPath $portableDir)
+  ) | Where-Object { $_ }
+
+  $candidateNames = @("ExecuNow", "workspacesexecunowdesktop")
+
+  Get-Process | Where-Object {
+    $candidateNames -contains $_.ProcessName
+  } | ForEach-Object {
+    try {
+      $processPath = $_.Path
+    }
+    catch {
+      $processPath = $null
+    }
+
+    if (!$processPath) {
+      return
+    }
+
+    $normalizedProcessPath = Get-NormalizedPath $processPath
+    $belongsToProject = $candidatePrefixes | Where-Object {
+      $normalizedProcessPath.StartsWith($_, [System.StringComparison]::OrdinalIgnoreCase)
+    } | Select-Object -First 1
+
+    if ($belongsToProject) {
+      Write-Host "Stopping running ExecuNow process before build:"
+      Write-Host "  $normalizedProcessPath"
+      Stop-Process -Id $_.Id -Force
+    }
+  }
+}
+
+function Test-FileIsWritable([string]$path) {
+  if (!(Test-Path $path)) {
+    return $true
+  }
+
+  try {
+    $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    $stream.Close()
+    return $true
+  }
+  catch {
+    return $false
+  }
+}
+
 function Find-VsDevCmd {
   $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 
@@ -82,6 +146,20 @@ exit /b %errorlevel%
 
 Push-Location $projectRoot
 try {
+  Stop-ExecuNowProjectProcesses
+
+  $lockedSourceExe = $sourceExeCandidates | Where-Object { !(Test-FileIsWritable $_) } | Select-Object -First 1
+
+  if ($lockedSourceExe) {
+    throw @"
+ExecuNow's release executable is still locked:
+$lockedSourceExe
+
+Close any running ExecuNow windows, system tray instances, or debugger sessions that were launched from this project,
+then run pnpm build:windows:portable again.
+"@
+  }
+
   $buildExitCode = Invoke-TauriPortableBuild
 
   if ($buildExitCode -ne 0) {

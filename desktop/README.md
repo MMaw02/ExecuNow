@@ -90,6 +90,12 @@ pnpm install
 pnpm build:windows:portable
 ```
 
+If the build fails with `failed to remove file ... Acceso denegado. (os error 5)`,
+the previous `ExecuNow.exe` is still running or locked. Close any ExecuNow
+windows, tray instances, or debugger sessions started from this project and run
+the command again. The portable build script also tries to stop matching
+ExecuNow processes from this project before compiling.
+
 This command cannot create the Windows portable package from WSL or the Linux
 devcontainer. Open the project on Windows directly, or use a Windows CI runner.
 If your repo lives inside WSL, copy or clone it to a Windows path such as
