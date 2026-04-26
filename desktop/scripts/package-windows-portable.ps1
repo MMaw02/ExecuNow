@@ -119,10 +119,10 @@ function Invoke-TauriPortableBuild {
 
   if ($linkExe) {
     if ($BuildLogPath) {
-      & pnpm tauri build --no-bundle 2>&1 | Tee-Object -FilePath $BuildLogPath
+      & cmd.exe /d /s /c "pnpm tauri build --no-bundle 2>&1" | Tee-Object -FilePath $BuildLogPath
     }
     else {
-      pnpm tauri build --no-bundle
+      & cmd.exe /d /s /c "pnpm tauri build --no-bundle"
     }
 
     return $LASTEXITCODE
@@ -149,12 +149,12 @@ VS Code alone is not enough. After installing it, open a new PowerShell window a
 @echo off
 call "$vsDevCmd" -arch=x64 -host_arch=x64
 if errorlevel 1 exit /b %errorlevel%
-pnpm tauri build --no-bundle
+pnpm tauri build --no-bundle 2>&1
 exit /b %errorlevel%
 "@
 
     if ($BuildLogPath) {
-      & cmd.exe /d /s /c "`"$cmdFile`"" 2>&1 | Tee-Object -FilePath $BuildLogPath
+      & cmd.exe /d /s /c "`"$cmdFile`"" | Tee-Object -FilePath $BuildLogPath
     }
     else {
       & cmd.exe /d /s /c "`"$cmdFile`""
