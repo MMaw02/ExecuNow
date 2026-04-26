@@ -11,22 +11,79 @@ $sourceExeCandidates = @(
 )
 $portableExe = Join-Path $portableDir "ExecuNow.exe"
 
-Push-Location $projectRoot
-try {
+function Find-VsDevCmd {
+  $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+
+  if (Test-Path $vswhere) {
+    $installationPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+
+    if ($LASTEXITCODE -eq 0 -and $installationPath) {
+      $candidate = Join-Path $installationPath "Common7\Tools\VsDevCmd.bat"
+
+      if (Test-Path $candidate) {
+        return $candidate
+      }
+    }
+  }
+
+  $fallbackCandidates = @(
+    "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat",
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat",
+    "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat",
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\Tools\VsDevCmd.bat"
+  )
+
+  return $fallbackCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+
+function Invoke-TauriPortableBuild {
   $linkExe = Get-Command "link.exe" -ErrorAction SilentlyContinue
 
-  if (!$linkExe) {
+  if ($linkExe) {
+    pnpm tauri build --no-bundle
+    return $LASTEXITCODE
+  }
+
+  $vsDevCmd = Find-VsDevCmd
+
+  if (!$vsDevCmd) {
     throw @"
 The MSVC linker link.exe was not found.
 
-Install "Build Tools for Visual Studio" with the "Desktop development with C++" workload,
-then open a new PowerShell or "Developer PowerShell for VS" window and run this command again.
+Install "Build Tools for Visual Studio 2022" with the "Desktop development with C++" workload.
+VS Code alone is not enough. After installing it, open a new PowerShell window and run this command again.
 "@
   }
 
-  pnpm tauri build --no-bundle
+  Write-Host "MSVC linker was not found in PATH. Loading Visual Studio build environment:"
+  Write-Host $vsDevCmd
 
-  if ($LASTEXITCODE -ne 0) {
+  $cmdFile = [System.IO.Path]::ChangeExtension([System.IO.Path]::GetTempFileName(), ".cmd")
+
+  try {
+    Set-Content -Encoding ASCII -Path $cmdFile -Value @"
+@echo off
+call "$vsDevCmd" -arch=x64 -host_arch=x64
+if errorlevel 1 exit /b %errorlevel%
+pnpm tauri build --no-bundle
+exit /b %errorlevel%
+"@
+
+    & cmd.exe /d /s /c "`"$cmdFile`""
+    return $LASTEXITCODE
+  }
+  finally {
+    if (Test-Path $cmdFile) {
+      Remove-Item -Force $cmdFile
+    }
+  }
+}
+
+Push-Location $projectRoot
+try {
+  $buildExitCode = Invoke-TauriPortableBuild
+
+  if ($buildExitCode -ne 0) {
     throw "Tauri build failed. Portable package was not created."
   }
 

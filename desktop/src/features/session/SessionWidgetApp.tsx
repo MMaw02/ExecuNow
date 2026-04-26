@@ -11,11 +11,13 @@ import {
 } from "./session-widget.events.ts";
 import { isSessionWidgetActive } from "./session-widget.model.ts";
 import { useSessionWidgetSnapshot } from "./useSessionWidgetSnapshot.ts";
-import { isTauriRuntime, startWidgetWindowDrag } from "../widget/widget.events.ts";
+import { getWidgetRuntime, isTauriRuntime } from "../widget/widget.runtime.ts";
+import { shouldStartWidgetWindowDrag } from "../widget/widget.window.ts";
 
 export function SessionWidgetApp() {
   const snapshot = useSessionWidgetSnapshot();
   const windowLabel = getCurrentWindowLabel();
+  const widgetRuntime = getWidgetRuntime();
   const sessionActive = isSessionWidgetActive(snapshot);
   const pauseDisabled = !snapshot.isPaused && snapshot.pauseUsed;
   const title = snapshot.sessionTask || "Focus block";
@@ -82,22 +84,12 @@ export function SessionWidgetApp() {
   }, []);
 
   function handleWidgetMouseDown(event: MouseEvent<HTMLElement>) {
-    if (event.button !== 0) {
-      return;
-    }
-
-    const target = event.target as HTMLElement;
-
-    if (
-      target.closest(
-        "button, input, select, textarea, a, [role='button'], [data-widget-no-drag]",
-      )
-    ) {
+    if (event.button !== 0 || !shouldStartWidgetWindowDrag(event.target)) {
       return;
     }
 
     event.preventDefault();
-    void startWidgetWindowDrag();
+    void widgetRuntime.startWindowDrag();
   }
 
   async function handleTogglePause() {

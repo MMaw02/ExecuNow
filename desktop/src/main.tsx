@@ -5,12 +5,12 @@ import App from "./App";
 import { SessionWidgetApp } from "./features/session/SessionWidgetApp.tsx";
 import { StartupWidgetApp } from "./features/widget/StartupWidgetApp.tsx";
 import {
-  getCurrentWindowLabel,
-  SESSION_WIDGET_WINDOW_LABEL,
-  STARTUP_WIDGET_WINDOW_LABEL,
-} from "./features/widget/widget.events.ts";
+  getCurrentWindowKind,
+  SESSION_WIDGET_WINDOW_KIND,
+  STARTUP_WIDGET_WINDOW_KIND,
+} from "./features/widget/widget.runtime.ts";
 
-const currentWindowLabel = getCurrentWindowLabel();
+const currentWindowLabel = getCurrentWindowKind();
 const rootElement = document.getElementById("root");
 
 document.body.classList.remove(
@@ -19,18 +19,18 @@ document.body.classList.remove(
   "window-session-widget",
 );
 document.body.classList.add(
-  currentWindowLabel === STARTUP_WIDGET_WINDOW_LABEL
+  currentWindowLabel === STARTUP_WIDGET_WINDOW_KIND
     ? "window-startup-widget"
-    : currentWindowLabel === SESSION_WIDGET_WINDOW_LABEL
+    : currentWindowLabel === SESSION_WIDGET_WINDOW_KIND
       ? "window-session-widget"
-    : "window-main",
+      : "window-main",
 );
 
 ReactDOM.createRoot(rootElement as HTMLElement).render(
   <React.StrictMode>
-    {currentWindowLabel === STARTUP_WIDGET_WINDOW_LABEL ? (
+    {currentWindowLabel === STARTUP_WIDGET_WINDOW_KIND ? (
       <StartupWidgetApp />
-    ) : currentWindowLabel === SESSION_WIDGET_WINDOW_LABEL ? (
+    ) : currentWindowLabel === SESSION_WIDGET_WINDOW_KIND ? (
       <SessionWidgetApp />
     ) : (
       <App />

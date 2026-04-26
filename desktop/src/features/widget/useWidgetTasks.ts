@@ -13,10 +13,9 @@ import {
 } from "./widget.model.ts";
 import {
   emitWidgetTasksUpdated,
-  getCurrentWindowLabel,
-  isTauriRuntime,
   WIDGET_TASKS_UPDATED_EVENT,
-} from "./widget.events.ts";
+} from "./widget.sync.ts";
+import { getCurrentWindowKind, isTauriRuntime } from "./widget.runtime.ts";
 import { readWidgetState, writeWidgetState } from "./widget.storage.ts";
 import type {
   WidgetPriority,
@@ -27,7 +26,7 @@ import type {
 } from "./widget.types.ts";
 
 export function useWidgetTasks() {
-  const windowLabel = getCurrentWindowLabel();
+  const windowLabel = getCurrentWindowKind();
   const [state, setState] = useState<WidgetState>(() => readWidgetState());
   const stateRef = useRef(state);
 

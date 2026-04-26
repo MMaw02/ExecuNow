@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isTauriRuntime } from "../widget/widget.events.ts";
+import { isTauriRuntime } from "../widget/widget.runtime.ts";
 import type {
   BlockingApplyResult,
   WebBlockingStatus,

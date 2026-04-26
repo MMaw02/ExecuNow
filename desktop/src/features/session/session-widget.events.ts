@@ -1,20 +1,21 @@
-import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import {
-  getCurrentWindowLabel,
+  getCurrentWindowKind,
+  getWidgetRuntime,
   isTauriRuntime,
-} from "../widget/widget.events.ts";
+  SESSION_WIDGET_WINDOW_KIND,
+} from "../widget/widget.runtime.ts";
 import type {
   SessionWidgetControl,
   SessionWidgetSnapshot,
 } from "./session-widget.types.ts";
 
-export const SESSION_WIDGET_WINDOW_LABEL = "session-widget";
+export const SESSION_WIDGET_WINDOW_LABEL = SESSION_WIDGET_WINDOW_KIND;
 export const SESSION_WIDGET_STATE_UPDATED_EVENT = "session:state-updated";
 export const SESSION_WIDGET_CONTROL_EVENT = "session:control";
 export const SESSION_WIDGET_BROWSER_UPDATED_EVENT = "execunow:session-widget-updated";
 
-export { getCurrentWindowLabel };
+export const getCurrentWindowLabel = getCurrentWindowKind;
 
 export function emitBrowserSessionWidgetUpdated(
   snapshot: SessionWidgetSnapshot,
@@ -59,11 +60,5 @@ export async function emitSessionWidgetControl(
 }
 
 export async function reinforceSessionWidgetZOrder(forceFocus = false) {
-  if (!isTauriRuntime()) {
-    return;
-  }
-
-  await invoke("reinforce_session_widget_z_order", {
-    force_focus: forceFocus,
-  });
+  await getWidgetRuntime().reinforceSessionWidgetZOrder(forceFocus);
 }

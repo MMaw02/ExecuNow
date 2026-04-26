@@ -14,7 +14,7 @@ import type {
   SessionWidgetSnapshot,
   SessionWidgetStateUpdatedPayload,
 } from "./session-widget.types.ts";
-import { isTauriRuntime } from "../widget/widget.events.ts";
+import { isTauriRuntime } from "../widget/widget.runtime.ts";
 
 export function useSessionWidgetSnapshot() {
   const windowLabel = getCurrentWindowLabel();

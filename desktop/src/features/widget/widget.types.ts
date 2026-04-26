@@ -17,11 +17,6 @@ export type WidgetState = {
   selectedTaskId: string | null;
 };
 
-export type WidgetTaskTransferPayload = {
-  title: string;
-  duration: DurationOption;
-};
-
 export type WidgetTasksUpdatedPayload = {
   source: string;
   state: WidgetState;

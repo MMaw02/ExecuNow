@@ -53,6 +53,13 @@ Install the Windows toolchain first:
    workload. This provides the MSVC linker, `link.exe`. VS Code alone is not
    enough.
 
+If `winget` says Build Tools is already installed, modify the existing
+installation to add the C++ workload. Run PowerShell as Administrator:
+
+```powershell
+& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe" modify --installPath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive --norestart
+```
+
 After installing the Visual Studio Build Tools, open a new PowerShell window and
 confirm the linker is available:
 
@@ -60,8 +67,20 @@ confirm the linker is available:
 where.exe link.exe
 ```
 
-If that does not print a path, open `Developer PowerShell for VS 2022` from the
-Start menu and run the portable build there.
+If that does not print a path, the portable build script will try to locate
+Visual Studio Build Tools and load `VsDevCmd.bat` automatically. If it still
+fails, open `Developer PowerShell for VS 2022` from the Start menu and run the
+portable build there.
+
+To check whether the C++ workload is actually installed, run:
+
+```powershell
+& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+```
+
+If this prints nothing, modify Build Tools and add `Desktop development with
+C++`. If it prints a Visual Studio path, open `Developer PowerShell for VS 2022`
+or run the portable build again so the script can load that environment.
 
 Then run this from PowerShell or Windows Terminal, outside WSL:
 

@@ -26,13 +26,10 @@ import { SummaryView } from "./features/session/views/SummaryView.tsx";
 import { TasksView } from "./features/widget/TasksView.tsx";
 import { Toaster } from "./shared/components/ui/sonner.tsx";
 import {
-  consumePendingWidgetAction,
-  isTauriRuntime,
   MAIN_WINDOW_LABEL,
-  openSessionWidgetWindowFromMain,
-  openStartupWidgetWindowFromMain,
-  showMainWindow,
-} from "./features/widget/widget.events.ts";
+  getWidgetRuntime,
+  isTauriRuntime,
+} from "./features/widget/widget.runtime.ts";
 
 function App() {
   const { state, derived, actions } = useSessionFlow();
@@ -40,9 +37,10 @@ function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const focusedMinutes = state.stats.focusMinutes + getElapsedMinutes(state);
   const sessionWidgetSnapshot = createSessionWidgetSnapshot(state);
+  const widgetRuntime = getWidgetRuntime();
 
   const processPendingWidgetAction = useEffectEvent(() => {
-    const pendingAction = consumePendingWidgetAction();
+    const pendingAction = widgetRuntime.consumePendingAction();
 
     if (!pendingAction) {
       return;
@@ -69,7 +67,7 @@ function App() {
         return;
       }
 
-      void showMainWindow();
+      void widgetRuntime.showMainWindow();
     },
   );
 
@@ -151,8 +149,8 @@ function App() {
       return;
     }
 
-    void showMainWindow();
-  }, [state.view]);
+    void widgetRuntime.showMainWindow();
+  }, [state.view, widgetRuntime]);
 
   let content = null;
 
@@ -196,7 +194,7 @@ function App() {
           strictBlocking={state.strictBlocking}
           onTogglePause={actions.togglePause}
           onCloseSession={actions.closeSession}
-          onOpenWidget={() => void openSessionWidgetWindowFromMain()}
+          onOpenWidget={() => void widgetRuntime.showSessionWidgetWindow()}
         />
       );
       break;
@@ -260,7 +258,7 @@ function App() {
             canNavigateTo={derived.canNavigateTo}
             isWidgetActionDisabled={derived.sessionFlowLocked}
             onNavigate={actions.navigateTo}
-            onOpenWidget={() => void openStartupWidgetWindowFromMain()}
+            onOpenWidget={() => void widgetRuntime.showStartupWidgetWindow()}
             onToggleCollapsed={() => setIsSidebarCollapsed((value) => !value)}
           />
         }
