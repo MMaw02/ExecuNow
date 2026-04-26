@@ -478,17 +478,18 @@ fn run_hosts_task_runner() -> i32 {
     };
     let response = match read_json_file::<BlockingTaskRequest>(&request_path) {
         Ok(request) => {
+            let request_id = request.request_id.clone();
             let execution = match request.operation.as_str() {
                 "apply" => default_provider()
                     .apply(&request.domains)
                     .map(|apply_result| BlockingTaskResult {
-                        request_id: request.request_id,
+                        request_id: request_id.clone(),
                         ok: true,
                         error: None,
                         apply_result: Some(apply_result),
                     }),
                 "clear" => default_provider().clear().map(|_| BlockingTaskResult {
-                    request_id: request.request_id,
+                    request_id: request_id.clone(),
                     ok: true,
                     error: None,
                     apply_result: None,
@@ -499,7 +500,7 @@ fn run_hosts_task_runner() -> i32 {
             match execution {
                 Ok(result) => result,
                 Err(error) => BlockingTaskResult {
-                    request_id: request.request_id,
+                    request_id,
                     ok: false,
                     error: Some(error),
                     apply_result: None,
