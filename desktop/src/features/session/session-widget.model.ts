@@ -1,6 +1,7 @@
 import type { SessionState, View } from "./session.types.ts";
 import type {
   SessionWidgetControl,
+  SessionWidgetDisplayState,
   SessionWidgetSnapshot,
 } from "./session-widget.types.ts";
 
@@ -79,10 +80,51 @@ export function normalizeSessionWidgetControl(
   return value === "toggle-pause" || value === "return-to-main" ? value : null;
 }
 
+export function createSessionWidgetDisplayState(
+  snapshot: SessionWidgetSnapshot,
+): SessionWidgetDisplayState {
+  const sessionActive = isSessionWidgetActive(snapshot);
+
+  return {
+    focusStateLabel: snapshot.isPaused
+      ? "PAUSE"
+      : snapshot.sessionPhase === "break"
+        ? "BREAK"
+        : "FOCUS",
+    pauseDisabled: !snapshot.isPaused && snapshot.pauseUsed,
+    sessionActive,
+    statusLabel: sessionActive
+      ? snapshot.isPaused
+        ? "Paused"
+        : snapshot.sessionPhase === "break"
+          ? "Break live"
+          : snapshot.strictBlocking
+            ? "Strict focus live"
+            : "Focus block live"
+      : "Return to the main session view to continue.",
+    title: sessionActive ? snapshot.sessionTask || "Focus block" : "Session unavailable",
+  };
+}
+
 export function isSessionWidgetActive(
   snapshot: Pick<SessionWidgetSnapshot, "view">,
 ) {
   return snapshot.view === "active";
+}
+
+export function shouldPersistSessionWidgetSnapshot(
+  previous: SessionWidgetSnapshot,
+  next: SessionWidgetSnapshot,
+) {
+  return (
+    previous.view !== next.view ||
+    previous.sessionTask !== next.sessionTask ||
+    previous.sessionDuration !== next.sessionDuration ||
+    previous.sessionPhase !== next.sessionPhase ||
+    previous.isPaused !== next.isPaused ||
+    previous.pauseUsed !== next.pauseUsed ||
+    previous.strictBlocking !== next.strictBlocking
+  );
 }
 
 function normalizeView(value: unknown): View {

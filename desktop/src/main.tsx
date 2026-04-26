@@ -5,6 +5,7 @@ import App from "./App";
 import { SessionWidgetApp } from "./features/session/SessionWidgetApp.tsx";
 import { StartupWidgetApp } from "./features/widget/StartupWidgetApp.tsx";
 import {
+  getDefaultSessionWidgetProfile,
   getCurrentWindowKind,
   SESSION_WIDGET_WINDOW_KIND,
   STARTUP_WIDGET_WINDOW_KIND,
@@ -25,6 +26,11 @@ document.body.classList.add(
       ? "window-session-widget"
       : "window-main",
 );
+
+if (currentWindowLabel === SESSION_WIDGET_WINDOW_KIND) {
+  document.body.dataset.sessionWidgetSurfaceVariant =
+    getDefaultSessionWidgetProfile().surfaceVariant;
+}
 
 ReactDOM.createRoot(rootElement as HTMLElement).render(
   <React.StrictMode>

@@ -7,7 +7,7 @@
   "maxWidth": 820,
   "maxHeight": 96,
   "centerOnCreate": false,
-  "transparent": true,
+  "transparent": false,
   "decorations": false,
   "alwaysOnTop": true,
   "visibleOnAllWorkspaces": true,
@@ -16,5 +16,7 @@
   "maximizable": false,
   "minimizable": false,
   "shadow": false,
-  "topOffset": 24
+  "topOffset": 24,
+  "focusPolicy": "focus-on-open",
+  "surfaceVariant": "stable-windows"
 }

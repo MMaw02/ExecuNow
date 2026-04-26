@@ -13,6 +13,21 @@ export const MAIN_WINDOW_LABEL = MAIN_WINDOW_KIND;
 export const STARTUP_WIDGET_WINDOW_LABEL = STARTUP_WIDGET_WINDOW_KIND;
 export const SESSION_WIDGET_WINDOW_LABEL = SESSION_WIDGET_WINDOW_KIND;
 
+export type SessionWidgetFocusPolicy =
+  | "aggressive"
+  | "focus-on-open"
+  | "passive";
+
+export type SessionWidgetShellVariant =
+  | "glass-default"
+  | "stable-windows";
+
+export type SessionWidgetProfile = {
+  focusPolicy: SessionWidgetFocusPolicy;
+  surfaceVariant: SessionWidgetShellVariant;
+  transparentWindow: boolean;
+};
+
 export type WidgetWindowKind =
   | typeof MAIN_WINDOW_KIND
   | typeof STARTUP_WIDGET_WINDOW_KIND
@@ -20,6 +35,7 @@ export type WidgetWindowKind =
 
 export type WidgetRuntime = {
   consumePendingAction(): WidgetPendingAction | null;
+  getSessionWidgetProfile(): Promise<SessionWidgetProfile>;
   getCurrentWindowKind(): WidgetWindowKind;
   hideSessionWidgetWindow(): Promise<void>;
   isNative: boolean;
@@ -33,6 +49,7 @@ export type WidgetRuntime = {
 
 type WidgetNativeBridge = {
   getCurrentWindowLabel(): string;
+  getSessionWidgetProfile(): Promise<SessionWidgetProfile>;
   hideSessionWidgetWindow(): Promise<void>;
   reinforceSessionWidgetZOrder(forceFocus?: boolean): Promise<void>;
   showMainWindow(): Promise<void>;
@@ -48,15 +65,21 @@ export function isTauriRuntime(): boolean {
 export function createBrowserWidgetRuntime(
   options: {
     handoffStore?: WidgetPendingActionStore;
+    sessionWidgetProfile?: SessionWidgetProfile;
     windowKind?: WidgetWindowKind;
   } = {},
 ): WidgetRuntime {
   const handoffStore =
     options.handoffStore ?? createWidgetPendingActionStore();
+  const sessionWidgetProfile =
+    options.sessionWidgetProfile ?? getDefaultSessionWidgetProfile();
   const windowKind = options.windowKind ?? MAIN_WINDOW_KIND;
 
   return {
     isNative: false,
+    async getSessionWidgetProfile() {
+      return sessionWidgetProfile;
+    },
     getCurrentWindowKind() {
       return windowKind;
     },
@@ -79,8 +102,19 @@ export function createTauriWidgetRuntime(
   bridge: WidgetNativeBridge = createTauriBridge(),
   handoffStore: WidgetPendingActionStore = createWidgetPendingActionStore(),
 ): WidgetRuntime {
+  let sessionWidgetProfilePromise: Promise<SessionWidgetProfile> | null = null;
+
   return {
     isNative: true,
+    getSessionWidgetProfile() {
+      if (!sessionWidgetProfilePromise) {
+        sessionWidgetProfilePromise = bridge
+          .getSessionWidgetProfile()
+          .catch(() => getDefaultSessionWidgetProfile());
+      }
+
+      return sessionWidgetProfilePromise;
+    },
     getCurrentWindowKind() {
       return normalizeWidgetWindowKind(bridge.getCurrentWindowLabel());
     },
@@ -123,6 +157,24 @@ export function getCurrentWindowKind(): WidgetWindowKind {
   return getWidgetRuntime().getCurrentWindowKind();
 }
 
+export function getDefaultSessionWidgetProfile(): SessionWidgetProfile {
+  const operatingSystem = detectOperatingSystem();
+
+  if (operatingSystem === "windows") {
+    return {
+      focusPolicy: "focus-on-open",
+      surfaceVariant: "stable-windows",
+      transparentWindow: false,
+    };
+  }
+
+  return {
+    focusPolicy: "focus-on-open",
+    surfaceVariant: "glass-default",
+    transparentWindow: true,
+  };
+}
+
 export function normalizeWidgetWindowKind(value: string): WidgetWindowKind {
   if (
     value === STARTUP_WIDGET_WINDOW_KIND ||
@@ -138,6 +190,9 @@ function createTauriBridge(): WidgetNativeBridge {
   return {
     getCurrentWindowLabel() {
       return getCurrentWebviewWindow().label;
+    },
+    async getSessionWidgetProfile() {
+      return invoke<SessionWidgetProfile>("get_session_widget_profile");
     },
     async hideSessionWidgetWindow() {
       await invoke("hide_session_widget_window");
@@ -160,6 +215,28 @@ function createTauriBridge(): WidgetNativeBridge {
       await invoke("start_widget_window_drag");
     },
   };
+}
+
+function detectOperatingSystem() {
+  if (typeof navigator === "undefined") {
+    return "unknown";
+  }
+
+  const userAgent = navigator.userAgent.toLowerCase();
+
+  if (userAgent.includes("windows")) {
+    return "windows";
+  }
+
+  if (userAgent.includes("mac")) {
+    return "macos";
+  }
+
+  if (userAgent.includes("linux")) {
+    return "linux";
+  }
+
+  return "unknown";
 }
 
 const browserWidgetRuntime = createBrowserWidgetRuntime();

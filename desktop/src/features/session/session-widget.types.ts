@@ -14,6 +14,14 @@ export type SessionWidgetSnapshot = {
 
 export type SessionWidgetControl = "toggle-pause" | "return-to-main";
 
+export type SessionWidgetDisplayState = {
+  focusStateLabel: "FOCUS" | "BREAK" | "PAUSE";
+  pauseDisabled: boolean;
+  sessionActive: boolean;
+  statusLabel: string;
+  title: string;
+};
+
 export type SessionWidgetStateUpdatedPayload = {
   source: string;
   snapshot: SessionWidgetSnapshot;

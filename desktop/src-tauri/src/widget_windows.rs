@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     fs,
@@ -41,6 +41,8 @@ struct AuxiliaryWindowConfig {
     minimizable: bool,
     shadow: bool,
     top_offset: Option<f64>,
+    focus_policy: Option<SessionWidgetFocusPolicy>,
+    surface_variant: Option<SessionWidgetSurfaceVariant>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -64,6 +66,31 @@ struct AuxiliaryWindowConfigOverride {
     minimizable: Option<bool>,
     shadow: Option<bool>,
     top_offset: Option<f64>,
+    focus_policy: Option<SessionWidgetFocusPolicy>,
+    surface_variant: Option<SessionWidgetSurfaceVariant>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionWidgetFocusPolicy {
+    Aggressive,
+    FocusOnOpen,
+    Passive,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionWidgetSurfaceVariant {
+    GlassDefault,
+    StableWindows,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionWidgetProfile {
+    pub focus_policy: SessionWidgetFocusPolicy,
+    pub surface_variant: SessionWidgetSurfaceVariant,
+    pub transparent_window: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -94,27 +121,39 @@ impl WidgetWindowTarget {
                 minimizable: false,
                 shadow: false,
                 top_offset: None,
+                focus_policy: None,
+                surface_variant: None,
             },
-            Self::Session => AuxiliaryWindowConfig {
-                title: "ExecuNow Session Widget".to_string(),
-                width: 820.0,
-                height: 96.0,
-                min_width: 820.0,
-                min_height: 96.0,
-                max_width: 820.0,
-                max_height: 96.0,
-                center_on_create: false,
-                transparent: true,
-                decorations: false,
-                always_on_top: true,
-                visible_on_all_workspaces: true,
-                skip_taskbar: true,
-                resizable: false,
-                maximizable: false,
-                minimizable: false,
-                shadow: false,
-                top_offset: Some(24.0),
-            },
+            Self::Session => {
+                let stable_windows = cfg!(target_os = "windows");
+
+                AuxiliaryWindowConfig {
+                    title: "ExecuNow Session Widget".to_string(),
+                    width: 820.0,
+                    height: 96.0,
+                    min_width: 820.0,
+                    min_height: 96.0,
+                    max_width: 820.0,
+                    max_height: 96.0,
+                    center_on_create: false,
+                    transparent: !stable_windows,
+                    decorations: false,
+                    always_on_top: true,
+                    visible_on_all_workspaces: true,
+                    skip_taskbar: true,
+                    resizable: false,
+                    maximizable: false,
+                    minimizable: false,
+                    shadow: false,
+                    top_offset: Some(24.0),
+                    focus_policy: Some(SessionWidgetFocusPolicy::FocusOnOpen),
+                    surface_variant: Some(if stable_windows {
+                        SessionWidgetSurfaceVariant::StableWindows
+                    } else {
+                        SessionWidgetSurfaceVariant::GlassDefault
+                    }),
+                }
+            }
         }
     }
 
@@ -182,6 +221,12 @@ impl AuxiliaryWindowConfig {
         if let Some(top_offset) = override_config.top_offset {
             self.top_offset = Some(top_offset);
         }
+        if let Some(focus_policy) = override_config.focus_policy {
+            self.focus_policy = Some(focus_policy);
+        }
+        if let Some(surface_variant) = override_config.surface_variant {
+            self.surface_variant = Some(surface_variant);
+        }
 
         self
     }
@@ -220,6 +265,11 @@ pub fn reinforce_session_widget_z_order(
         config.visible_on_all_workspaces,
         force_focus,
     )
+}
+
+pub fn get_session_widget_profile(app: &AppHandle) -> SessionWidgetProfile {
+    let config = resolve_window_config(app, WidgetWindowTarget::Session);
+    build_session_widget_profile(&config)
 }
 
 pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
@@ -355,22 +405,32 @@ fn resolve_window_config(
     app: &AppHandle,
     target: WidgetWindowTarget,
 ) -> AuxiliaryWindowConfig {
-    let config_directory = app.path().app_config_dir().ok();
-    resolve_window_config_from_dir(target, config_directory.as_deref())
+    resolve_window_config_from_sources(
+        target,
+        &[
+            app.path().app_config_dir().ok(),
+            portable_config_directory(),
+        ],
+    )
 }
 
-fn resolve_window_config_from_dir(
+fn resolve_window_config_from_sources(
     target: WidgetWindowTarget,
-    config_directory: Option<&Path>,
+    override_roots: &[Option<PathBuf>],
 ) -> AuxiliaryWindowConfig {
     let defaults = target.default_config();
-    let Some(override_config) =
-        load_window_override_from_dir(config_directory, target.label())
-    else {
-        return defaults;
-    };
+    let mut resolved = defaults;
 
-    defaults.apply_override(override_config)
+    for override_root in override_roots.iter().flatten() {
+        if let Some(override_config) =
+            load_window_override_from_dir(Some(override_root.as_path()), target.label())
+        {
+            resolved = resolved.apply_override(override_config);
+            break;
+        }
+    }
+
+    resolved
 }
 
 fn load_window_override_from_dir(
@@ -399,6 +459,29 @@ fn build_window_override_path(config_directory: &Path, label: &str) -> PathBuf {
         label,
         env::consts::OS
     ))
+}
+
+fn portable_config_directory() -> Option<PathBuf> {
+    let executable_path = env::current_exe().ok()?;
+    let executable_directory = executable_path.parent()?;
+
+    Some(executable_directory.join("config"))
+}
+
+fn build_session_widget_profile(config: &AuxiliaryWindowConfig) -> SessionWidgetProfile {
+    SessionWidgetProfile {
+        focus_policy: config
+            .focus_policy
+            .unwrap_or(SessionWidgetFocusPolicy::FocusOnOpen),
+        surface_variant: config
+            .surface_variant
+            .unwrap_or(if config.transparent {
+                SessionWidgetSurfaceVariant::GlassDefault
+            } else {
+                SessionWidgetSurfaceVariant::StableWindows
+            }),
+        transparent_window: config.transparent,
+    }
 }
 
 fn reinforce_widget_priority(
@@ -479,7 +562,7 @@ mod tests {
 
     #[test]
     fn resolve_window_config_uses_defaults_when_override_is_missing() {
-        let config = resolve_window_config_from_dir(WidgetWindowTarget::Startup, None);
+        let config = resolve_window_config_from_sources(WidgetWindowTarget::Startup, &[]);
 
         assert_eq!(config, WidgetWindowTarget::Startup.default_config());
     }
@@ -498,8 +581,10 @@ mod tests {
         )
         .unwrap();
 
-        let config =
-            resolve_window_config_from_dir(WidgetWindowTarget::Startup, Some(&temp_dir));
+        let config = resolve_window_config_from_sources(
+            WidgetWindowTarget::Startup,
+            &[Some(temp_dir.clone())],
+        );
 
         assert_eq!(config.width, 480.0);
         assert!(!config.always_on_top);
@@ -518,12 +603,59 @@ mod tests {
 
         fs::write(&override_path, "{not-json").unwrap();
 
-        let config =
-            resolve_window_config_from_dir(WidgetWindowTarget::Session, Some(&temp_dir));
+        let config = resolve_window_config_from_sources(
+            WidgetWindowTarget::Session,
+            &[Some(temp_dir.clone())],
+        );
 
         assert_eq!(config, WidgetWindowTarget::Session.default_config());
 
         fs::remove_dir_all(&temp_dir).unwrap();
+    }
+
+    #[test]
+    fn resolve_window_config_prefers_app_config_dir_over_portable_override() {
+        let app_config_dir = create_temp_config_dir();
+        let portable_config_dir = create_temp_config_dir();
+        fs::create_dir_all(app_config_dir.join(WIDGET_OVERRIDE_DIRECTORY)).unwrap();
+        fs::create_dir_all(portable_config_dir.join(WIDGET_OVERRIDE_DIRECTORY)).unwrap();
+
+        fs::write(
+            build_window_override_path(&app_config_dir, WidgetWindowTarget::Session.label()),
+            r#"{"title":"App Config Session","surfaceVariant":"stable-windows","transparent":false}"#,
+        )
+        .unwrap();
+        fs::write(
+            build_window_override_path(&portable_config_dir, WidgetWindowTarget::Session.label()),
+            r#"{"title":"Portable Session","surfaceVariant":"glass-default","transparent":true}"#,
+        )
+        .unwrap();
+
+        let config = resolve_window_config_from_sources(
+            WidgetWindowTarget::Session,
+            &[Some(app_config_dir.clone()), Some(portable_config_dir.clone())],
+        );
+
+        assert_eq!(config.title, "App Config Session");
+        assert_eq!(config.surface_variant, Some(SessionWidgetSurfaceVariant::StableWindows));
+        assert_eq!(config.transparent, false);
+
+        fs::remove_dir_all(app_config_dir).unwrap();
+        fs::remove_dir_all(portable_config_dir).unwrap();
+    }
+
+    #[test]
+    fn session_widget_profile_matches_stable_windows_defaults() {
+        let mut config = WidgetWindowTarget::Session.default_config();
+        config.transparent = false;
+        config.focus_policy = Some(SessionWidgetFocusPolicy::FocusOnOpen);
+        config.surface_variant = Some(SessionWidgetSurfaceVariant::StableWindows);
+
+        let profile = build_session_widget_profile(&config);
+
+        assert_eq!(profile.transparent_window, false);
+        assert_eq!(profile.focus_policy, SessionWidgetFocusPolicy::FocusOnOpen);
+        assert_eq!(profile.surface_variant, SessionWidgetSurfaceVariant::StableWindows);
     }
 
     fn create_temp_config_dir() -> PathBuf {

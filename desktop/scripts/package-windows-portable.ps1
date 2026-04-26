@@ -4,6 +4,7 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $releaseRoot = Join-Path $projectRoot "release"
 $portableDir = Join-Path $releaseRoot "ExecuNow"
+$portableConfigDir = Join-Path $portableDir "config\widgets"
 $zipPath = Join-Path $releaseRoot "ExecuNow-portable-windows.zip"
 $sourceExeCandidates = @(
   (Join-Path $projectRoot "src-tauri\target\release\ExecuNow.exe"),
@@ -100,7 +101,9 @@ try {
   }
 
   New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+  New-Item -ItemType Directory -Force -Path $portableConfigDir | Out-Null
   Copy-Item $sourceExe $portableExe
+  Copy-Item (Join-Path $projectRoot "src-tauri\config-examples\widgets\*.windows.json") $portableConfigDir
 
   if (Test-Path $zipPath) {
     Remove-Item -Force $zipPath

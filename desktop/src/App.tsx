@@ -6,15 +6,10 @@ import { AppShell } from "./features/shell/AppShell.tsx";
 import { Sidebar } from "./features/shell/Sidebar.tsx";
 import { getElapsedMinutes } from "./features/session/session.model.ts";
 import {
-  emitBrowserSessionWidgetUpdated,
-  emitSessionWidgetStateUpdated,
-  SESSION_WIDGET_CONTROL_EVENT,
-} from "./features/session/session-widget.events.ts";
-import {
   createSessionWidgetSnapshot,
   normalizeSessionWidgetControl,
 } from "./features/session/session-widget.model.ts";
-import { writeSessionWidgetSnapshot } from "./features/session/session-widget.storage.ts";
+import { getSessionWidgetSnapshotChannel } from "./features/session/session-widget.channel.ts";
 import type { SessionWidgetControlPayload } from "./features/session/session-widget.types.ts";
 import { useSessionFlow } from "./features/session/useSessionFlow.ts";
 import { ActiveSessionView } from "./features/session/views/ActiveSessionView.tsx";
@@ -38,6 +33,7 @@ function App() {
   const focusedMinutes = state.stats.focusMinutes + getElapsedMinutes(state);
   const sessionWidgetSnapshot = createSessionWidgetSnapshot(state);
   const widgetRuntime = getWidgetRuntime();
+  const sessionWidgetChannel = getSessionWidgetSnapshotChannel();
 
   const processPendingWidgetAction = useEffectEvent(() => {
     const pendingAction = widgetRuntime.consumePendingAction();
@@ -96,9 +92,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    writeSessionWidgetSnapshot(sessionWidgetSnapshot);
-    emitBrowserSessionWidgetUpdated(sessionWidgetSnapshot);
-    void emitSessionWidgetStateUpdated(sessionWidgetSnapshot, MAIN_WINDOW_LABEL);
+    void sessionWidgetChannel.publishSnapshot(sessionWidgetSnapshot, MAIN_WINDOW_LABEL);
   }, [
     sessionWidgetSnapshot.isPaused,
     sessionWidgetSnapshot.pauseUsed,
@@ -108,6 +102,7 @@ function App() {
     sessionWidgetSnapshot.sessionTask,
     sessionWidgetSnapshot.strictBlocking,
     sessionWidgetSnapshot.view,
+    sessionWidgetChannel,
   ]);
 
   useEffect(() => {
@@ -115,34 +110,13 @@ function App() {
       return;
     }
 
-    let unlisten: (() => void) | undefined;
-    let disposed = false;
-
-    void getCurrentWebviewWindow()
-      .listen<SessionWidgetControlPayload>(
-        SESSION_WIDGET_CONTROL_EVENT,
-        (event) => {
-          if (event.payload.source === MAIN_WINDOW_LABEL) {
-            return;
-          }
-
-          processSessionWidgetControl(event.payload);
-        },
-      )
-      .then((cleanup) => {
-        if (disposed) {
-          cleanup();
-          return;
-        }
-
-        unlisten = cleanup;
-      });
-
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, []);
+    return sessionWidgetChannel.subscribeControl(
+      MAIN_WINDOW_LABEL,
+      (payload: SessionWidgetControlPayload) => {
+        processSessionWidgetControl(payload);
+      },
+    );
+  }, [processSessionWidgetControl, sessionWidgetChannel]);
 
   useEffect(() => {
     if (state.view !== "outcome") {
