@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{
     env,
     fs,
@@ -41,8 +41,6 @@ struct AuxiliaryWindowConfig {
     minimizable: bool,
     shadow: bool,
     top_offset: Option<f64>,
-    focus_policy: Option<SessionWidgetFocusPolicy>,
-    surface_variant: Option<SessionWidgetSurfaceVariant>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
@@ -66,31 +64,6 @@ struct AuxiliaryWindowConfigOverride {
     minimizable: Option<bool>,
     shadow: Option<bool>,
     top_offset: Option<f64>,
-    focus_policy: Option<SessionWidgetFocusPolicy>,
-    surface_variant: Option<SessionWidgetSurfaceVariant>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SessionWidgetFocusPolicy {
-    Aggressive,
-    FocusOnOpen,
-    Passive,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum SessionWidgetSurfaceVariant {
-    GlassDefault,
-    StableWindows,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionWidgetProfile {
-    pub focus_policy: SessionWidgetFocusPolicy,
-    pub surface_variant: SessionWidgetSurfaceVariant,
-    pub transparent_window: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -121,39 +94,27 @@ impl WidgetWindowTarget {
                 minimizable: false,
                 shadow: false,
                 top_offset: None,
-                focus_policy: None,
-                surface_variant: None,
             },
-            Self::Session => {
-                let stable_windows = cfg!(target_os = "windows");
-
-                AuxiliaryWindowConfig {
-                    title: "ExecuNow Session Widget".to_string(),
-                    width: 820.0,
-                    height: 96.0,
-                    min_width: 820.0,
-                    min_height: 96.0,
-                    max_width: 820.0,
-                    max_height: 96.0,
-                    center_on_create: false,
-                    transparent: !stable_windows,
-                    decorations: false,
-                    always_on_top: true,
-                    visible_on_all_workspaces: true,
-                    skip_taskbar: true,
-                    resizable: false,
-                    maximizable: false,
-                    minimizable: false,
-                    shadow: false,
-                    top_offset: Some(24.0),
-                    focus_policy: Some(SessionWidgetFocusPolicy::FocusOnOpen),
-                    surface_variant: Some(if stable_windows {
-                        SessionWidgetSurfaceVariant::StableWindows
-                    } else {
-                        SessionWidgetSurfaceVariant::GlassDefault
-                    }),
-                }
-            }
+            Self::Session => AuxiliaryWindowConfig {
+                title: "ExecuNow Session Widget".to_string(),
+                width: 820.0,
+                height: 96.0,
+                min_width: 820.0,
+                min_height: 96.0,
+                max_width: 820.0,
+                max_height: 96.0,
+                center_on_create: false,
+                transparent: false,
+                decorations: false,
+                always_on_top: true,
+                visible_on_all_workspaces: true,
+                skip_taskbar: true,
+                resizable: false,
+                maximizable: false,
+                minimizable: false,
+                shadow: false,
+                top_offset: Some(24.0),
+            },
         }
     }
 
@@ -221,12 +182,6 @@ impl AuxiliaryWindowConfig {
         if let Some(top_offset) = override_config.top_offset {
             self.top_offset = Some(top_offset);
         }
-        if let Some(focus_policy) = override_config.focus_policy {
-            self.focus_policy = Some(focus_policy);
-        }
-        if let Some(surface_variant) = override_config.surface_variant {
-            self.surface_variant = Some(surface_variant);
-        }
 
         self
     }
@@ -248,6 +203,15 @@ pub fn create_startup_widget(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+pub fn create_session_widget(app: &AppHandle) -> tauri::Result<()> {
+    let config = resolve_window_config(app, WidgetWindowTarget::Session);
+    let window = ensure_auxiliary_window(app, SESSION_WIDGET_LABEL, &config)?;
+
+    let _ = window.hide();
+
+    Ok(())
+}
+
 pub fn hide_session_widget_window(app: &AppHandle) -> Result<(), String> {
     hide_auxiliary_window(app, SESSION_WIDGET_LABEL)
 }
@@ -263,13 +227,8 @@ pub fn reinforce_session_widget_z_order(
         window,
         config.always_on_top,
         config.visible_on_all_workspaces,
-        allow_session_widget_focus(&config, force_focus),
+        force_focus,
     )
-}
-
-pub fn get_session_widget_profile(app: &AppHandle) -> SessionWidgetProfile {
-    let config = resolve_window_config(app, WidgetWindowTarget::Session);
-    build_session_widget_profile(&config)
 }
 
 pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
@@ -308,7 +267,7 @@ pub fn show_session_widget_window(app: &AppHandle) -> Result<(), String> {
         &widget_window,
         config.always_on_top,
         config.visible_on_all_workspaces,
-        allow_session_widget_focus(&config, true),
+        true,
     )?;
     main_window.hide().map_err(|error| error.to_string())?;
 
@@ -468,33 +427,6 @@ fn portable_config_directory() -> Option<PathBuf> {
     Some(executable_directory.join("config"))
 }
 
-fn build_session_widget_profile(config: &AuxiliaryWindowConfig) -> SessionWidgetProfile {
-    SessionWidgetProfile {
-        focus_policy: config
-            .focus_policy
-            .unwrap_or(SessionWidgetFocusPolicy::FocusOnOpen),
-        surface_variant: config
-            .surface_variant
-            .unwrap_or(if config.transparent {
-                SessionWidgetSurfaceVariant::GlassDefault
-            } else {
-                SessionWidgetSurfaceVariant::StableWindows
-            }),
-        transparent_window: config.transparent,
-    }
-}
-
-fn allow_session_widget_focus(
-    config: &AuxiliaryWindowConfig,
-    requested_focus: bool,
-) -> bool {
-    requested_focus
-        && !matches!(
-            config.focus_policy,
-            Some(SessionWidgetFocusPolicy::Passive)
-        )
-}
-
 fn reinforce_widget_priority(
     window: &WebviewWindow,
     always_on_top: bool,
@@ -633,12 +565,12 @@ mod tests {
 
         fs::write(
             build_window_override_path(&app_config_dir, WidgetWindowTarget::Session.label()),
-            r#"{"title":"App Config Session","surfaceVariant":"stable-windows","transparent":false}"#,
+            r#"{"title":"App Config Session","transparent":false}"#,
         )
         .unwrap();
         fs::write(
             build_window_override_path(&portable_config_dir, WidgetWindowTarget::Session.label()),
-            r#"{"title":"Portable Session","surfaceVariant":"glass-default","transparent":true}"#,
+            r#"{"title":"Portable Session","transparent":true}"#,
         )
         .unwrap();
 
@@ -648,25 +580,10 @@ mod tests {
         );
 
         assert_eq!(config.title, "App Config Session");
-        assert_eq!(config.surface_variant, Some(SessionWidgetSurfaceVariant::StableWindows));
         assert_eq!(config.transparent, false);
 
         fs::remove_dir_all(app_config_dir).unwrap();
         fs::remove_dir_all(portable_config_dir).unwrap();
-    }
-
-    #[test]
-    fn session_widget_profile_matches_stable_windows_defaults() {
-        let mut config = WidgetWindowTarget::Session.default_config();
-        config.transparent = false;
-        config.focus_policy = Some(SessionWidgetFocusPolicy::FocusOnOpen);
-        config.surface_variant = Some(SessionWidgetSurfaceVariant::StableWindows);
-
-        let profile = build_session_widget_profile(&config);
-
-        assert_eq!(profile.transparent_window, false);
-        assert_eq!(profile.focus_policy, SessionWidgetFocusPolicy::FocusOnOpen);
-        assert_eq!(profile.surface_variant, SessionWidgetSurfaceVariant::StableWindows);
     }
 
     fn create_temp_config_dir() -> PathBuf {

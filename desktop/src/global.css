@@ -131,16 +131,8 @@
   }
 
   body.window-session-widget {
-    background: transparent;
-  }
-
-  body.window-session-widget[data-session-widget-surface-variant="stable-windows"] {
     background:
       linear-gradient(180deg, rgba(7, 22, 44, 0.98), rgba(4, 17, 36, 0.98)),
       var(--base-deep);
-  }
-
-  body.window-session-widget[data-session-widget-surface-variant="glass-default"] {
-    background: transparent;
   }
 }

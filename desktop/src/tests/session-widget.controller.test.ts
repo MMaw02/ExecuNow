@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildSessionWidgetViewModel } from "../features/session/useSessionWidgetController.ts";
-import {
-  shouldForceFocusOnOpen,
-  shouldReassertOnBlur,
-} from "../features/session/useSessionWidgetWindowPolicy.ts";
 
 test("session widget view model derives active focus labels and pause guard", () => {
   const viewModel = buildSessionWidgetViewModel(
@@ -18,18 +14,12 @@ test("session widget view model derives active focus labels and pause guard", ()
       pauseUsed: true,
       strictBlocking: true,
     },
-    {
-      focusPolicy: "focus-on-open",
-      surfaceVariant: "stable-windows",
-      transparentWindow: false,
-    },
   );
 
   assert.equal(viewModel.title, "Close release checklist");
   assert.equal(viewModel.statusLabel, "Strict focus live");
   assert.equal(viewModel.focusStateLabel, "FOCUS");
   assert.equal(viewModel.pauseDisabled, true);
-  assert.equal(viewModel.shellVariant, "stable-windows");
 });
 
 test("session widget view model derives paused and inactive states", () => {
@@ -44,11 +34,6 @@ test("session widget view model derives paused and inactive states", () => {
       pauseUsed: true,
       strictBlocking: false,
     },
-    {
-      focusPolicy: "focus-on-open",
-      surfaceVariant: "glass-default",
-      transparentWindow: true,
-    },
   );
   const inactiveViewModel = buildSessionWidgetViewModel(
     {
@@ -61,11 +46,6 @@ test("session widget view model derives paused and inactive states", () => {
       pauseUsed: false,
       strictBlocking: true,
     },
-    {
-      focusPolicy: "passive",
-      surfaceVariant: "glass-default",
-      transparentWindow: true,
-    },
   );
 
   assert.equal(pausedViewModel.focusStateLabel, "PAUSE");
@@ -73,12 +53,4 @@ test("session widget view model derives paused and inactive states", () => {
   assert.equal(pausedViewModel.pauseDisabled, false);
   assert.equal(inactiveViewModel.title, "Session unavailable");
   assert.equal(inactiveViewModel.statusLabel, "Return to the main session view to continue.");
-});
-
-test("session widget window policy is event-driven instead of aggressive polling", () => {
-  assert.equal(shouldForceFocusOnOpen("focus-on-open"), true);
-  assert.equal(shouldForceFocusOnOpen("passive"), false);
-  assert.equal(shouldReassertOnBlur("focus-on-open"), true);
-  assert.equal(shouldReassertOnBlur("aggressive"), true);
-  assert.equal(shouldReassertOnBlur("passive"), false);
 });

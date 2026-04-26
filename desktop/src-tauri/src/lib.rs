@@ -37,11 +37,6 @@ fn show_session_widget_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_session_widget_profile(app: tauri::AppHandle) -> widget_windows::SessionWidgetProfile {
-    widget_windows::get_session_widget_profile(&app)
-}
-
-#[tauri::command]
 fn reinforce_session_widget_z_order(
     window: tauri::WebviewWindow,
     app: tauri::AppHandle,
@@ -68,6 +63,7 @@ pub fn run() {
                 eprintln!("{}", error);
             }
             widget_windows::create_startup_widget(&app.handle())?;
+            widget_windows::create_session_widget(&app.handle())?;
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -79,7 +75,6 @@ pub fn run() {
             show_main_window,
             show_startup_widget_window,
             show_session_widget_window,
-            get_session_widget_profile,
             reinforce_session_widget_z_order,
             hide_session_widget_window,
             start_widget_window_drag

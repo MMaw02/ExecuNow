@@ -16,7 +16,5 @@
   "maximizable": false,
   "minimizable": false,
   "shadow": false,
-  "topOffset": 24,
-  "focusPolicy": "focus-on-open",
-  "surfaceVariant": "stable-windows"
+  "topOffset": 24
 }

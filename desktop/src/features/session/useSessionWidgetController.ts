@@ -1,10 +1,5 @@
-import { useEffect, useState } from "react";
 import type { MouseEvent } from "react";
-import {
-  getDefaultSessionWidgetProfile,
-  getWidgetRuntime,
-  type SessionWidgetProfile,
-} from "../widget/widget.runtime.ts";
+import { getWidgetRuntime } from "../widget/widget.runtime.ts";
 import { shouldStartWidgetWindowDrag } from "../widget/widget.window.ts";
 import {
   createSessionWidgetDisplayState,
@@ -17,44 +12,11 @@ export function useSessionWidgetController() {
   const snapshot = useSessionWidgetSnapshot();
   const runtime = getWidgetRuntime();
   const channel = getSessionWidgetSnapshotChannel();
-  const [profile, setProfile] = useState<SessionWidgetProfile>(() =>
-    getDefaultSessionWidgetProfile(),
-  );
   const displayState = createSessionWidgetDisplayState(snapshot);
-
-  useEffect(() => {
-    let disposed = false;
-
-    void runtime.getSessionWidgetProfile().then((nextProfile) => {
-      if (!disposed) {
-        setProfile(nextProfile);
-      }
-    });
-
-    return () => {
-      disposed = true;
-    };
-  }, [runtime]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    document.body.dataset.sessionWidgetSurfaceVariant = profile.surfaceVariant;
-
-    return () => {
-      delete document.body.dataset.sessionWidgetSurfaceVariant;
-    };
-  }, [profile.surfaceVariant]);
 
   return {
     runtime,
-    windowPolicy: {
-      focusPolicy: profile.focusPolicy,
-      runtime,
-    },
-    viewModel: buildSessionWidgetViewModel(snapshot, profile),
+    viewModel: buildSessionWidgetViewModel(snapshot),
     handlers: {
       onReturnToMain() {
         void channel.publishControl("return-to-main", runtime.getCurrentWindowKind());
@@ -80,7 +42,6 @@ export function useSessionWidgetController() {
 
 export function buildSessionWidgetViewModel(
   snapshot: ReturnType<typeof useSessionWidgetSnapshot>,
-  profile: SessionWidgetProfile,
 ) {
   const displayState = createSessionWidgetDisplayState(snapshot);
 
@@ -89,7 +50,6 @@ export function buildSessionWidgetViewModel(
     pauseDisabled: displayState.pauseDisabled,
     remainingSeconds: snapshot.remainingSeconds,
     sessionActive: displayState.sessionActive,
-    shellVariant: profile.surfaceVariant,
     statusLabel: displayState.statusLabel,
     title: displayState.title,
   };
