@@ -102,6 +102,25 @@ function Find-VsDevCmd {
   return $fallbackCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 }
 
+function Invoke-LoggedCmdCommand {
+  param(
+    [string]$Command,
+    [string]$BuildLogPath
+  )
+
+  $output = & cmd.exe /d /s /c $Command
+  $exitCode = $LASTEXITCODE
+
+  if ($BuildLogPath) {
+    $output | Tee-Object -FilePath $BuildLogPath | Out-Host
+  }
+  else {
+    $output | Out-Host
+  }
+
+  return $exitCode
+}
+
 function Invoke-TauriPortableBuild {
   param(
     [string]$BuildLogPath
@@ -118,14 +137,7 @@ function Invoke-TauriPortableBuild {
   }
 
   if ($linkExe) {
-    if ($BuildLogPath) {
-      & cmd.exe /d /s /c "pnpm tauri build --no-bundle 2>&1" | Tee-Object -FilePath $BuildLogPath
-    }
-    else {
-      & cmd.exe /d /s /c "pnpm tauri build --no-bundle"
-    }
-
-    return $LASTEXITCODE
+    return Invoke-LoggedCmdCommand -Command "pnpm tauri build --no-bundle 2>&1" -BuildLogPath $BuildLogPath
   }
 
   $vsDevCmd = Find-VsDevCmd
@@ -153,14 +165,7 @@ pnpm tauri build --no-bundle 2>&1
 exit /b %errorlevel%
 "@
 
-    if ($BuildLogPath) {
-      & cmd.exe /d /s /c "`"$cmdFile`"" | Tee-Object -FilePath $BuildLogPath
-    }
-    else {
-      & cmd.exe /d /s /c "`"$cmdFile`""
-    }
-
-    return $LASTEXITCODE
+    return Invoke-LoggedCmdCommand -Command "`"$cmdFile`"" -BuildLogPath $BuildLogPath
   }
   finally {
     if (Test-Path $cmdFile) {
