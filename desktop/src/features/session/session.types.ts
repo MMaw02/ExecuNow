@@ -43,8 +43,12 @@ export type SessionState = {
   sessionPhase: PomodoroSessionPhase;
   sessionSegmentIndex: number;
   elapsedFocusSeconds: number;
+  elapsedFocusSecondsAtSegmentStart: number;
   remainingSeconds: number;
+  segmentStartedAtMs: number | null;
+  segmentEndsAtMs: number | null;
   isPaused: boolean;
+  pausedAtMs: number | null;
   pauseUsed: boolean;
   sessionResult: SessionResult;
   failureReason: string;
@@ -60,16 +64,17 @@ export type SessionAction =
       type: "sessionStartedFromWidget";
       value: SessionTaskDraft;
       settings: PomodoroSettings;
+      startedAtMs?: number;
     }
   | { type: "strictBlockingToggled" }
   | { type: "navigated"; value: View }
-  | { type: "sessionStarted"; settings: PomodoroSettings }
-  | { type: "pauseToggled" }
+  | { type: "sessionStarted"; settings: PomodoroSettings; startedAtMs?: number }
+  | { type: "pauseToggled"; nowMs?: number }
   | { type: "sessionClosed"; value: SessionOutcome }
   | { type: "sessionResultSelected"; value: SessionOutcome }
   | { type: "failureReasonSelected"; value: string }
   | { type: "sessionSaved" }
-  | { type: "tick" };
+  | { type: "tick"; nowMs?: number };
 
 export type NavigationItem = {
   id: NavView;

@@ -30,6 +30,11 @@ type BlockingSettingsViewProps = {
   entries: readonly WebBlockEntry[];
   onAddEntry: (rawInput: string) => { ok: boolean; error?: string };
   onRemoveEntry: (entryId: string) => void;
+  permissionSupported: boolean;
+  permissionGranted: boolean;
+  permissionLoading: boolean;
+  permissionGranting: boolean;
+  onGrantPermission: () => void;
 };
 
 export function BlockingSettingsView({
@@ -39,6 +44,11 @@ export function BlockingSettingsView({
   entries,
   onAddEntry,
   onRemoveEntry,
+  permissionSupported,
+  permissionGranted,
+  permissionLoading,
+  permissionGranting,
+  onGrantPermission,
 }: BlockingSettingsViewProps) {
   const [inputValue, setInputValue] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -92,6 +102,42 @@ export function BlockingSettingsView({
               disabled={sessionFlowLocked}
             >
               Switch mode
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card/92">
+        <CardContent className="flex flex-col gap-4 pt-5 md:flex-row md:items-center md:justify-between">
+          <div className="grid gap-1.5">
+            <div className="flex items-center gap-2">
+              <Label>Windows permission</Label>
+              <InfoHint label="Grant this once so strict sessions can update the hosts file without showing UAC every time." />
+            </div>
+            <p className={supportTextClassName}>
+              {!permissionSupported
+                ? "This helper is only needed on Windows."
+                : permissionGranted
+                  ? "The elevated helper is ready. Future strict sessions can start without another Windows permission prompt."
+                  : "ExecuNow still needs one administrator approval to prepare the background helper for silent blocking."}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Badge variant={permissionGranted ? "info" : "warning"}>
+              {permissionLoading
+                ? "Checking"
+                : permissionGranted
+                  ? "Ready"
+                  : "Needs approval"}
+            </Badge>
+            <Button
+              variant="outline"
+              className="min-w-[148px]"
+              onClick={onGrantPermission}
+              disabled={!permissionSupported || permissionGranting}
+            >
+              {permissionGranted ? "Refresh helper" : "Grant once"}
             </Button>
           </div>
         </CardContent>

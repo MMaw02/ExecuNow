@@ -1,6 +1,8 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useEffectEvent, useState } from "react";
+import { toast } from "sonner";
 import { BlockingSettingsView } from "./features/blocking/BlockingSettingsView.tsx";
+import { useWebBlockingPermission } from "./features/blocking/useWebBlockingPermission.ts";
 import { useWebBlockingSettings } from "./features/blocking/useWebBlockingSettings.ts";
 import { AppShell } from "./features/shell/AppShell.tsx";
 import { Sidebar } from "./features/shell/Sidebar.tsx";
@@ -29,6 +31,7 @@ import {
 function App() {
   const { state, derived, actions } = useSessionFlow();
   const { settings: webBlockingSettings, addEntry, removeEntry } = useWebBlockingSettings();
+  const webBlockingPermission = useWebBlockingPermission();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const focusedMinutes = state.stats.focusMinutes + getElapsedMinutes(state);
   const sessionWidgetSnapshot = createSessionWidgetSnapshot(state);
@@ -194,6 +197,30 @@ function App() {
           entries={webBlockingSettings.entries}
           onAddEntry={addEntry}
           onRemoveEntry={removeEntry}
+          permissionSupported={webBlockingPermission.status.supported}
+          permissionGranted={webBlockingPermission.status.permissionGranted}
+          permissionLoading={webBlockingPermission.loading}
+          permissionGranting={webBlockingPermission.granting}
+          onGrantPermission={() => {
+            void webBlockingPermission
+              .grant()
+              .then(() => {
+                toast.success("Windows blocking helper is ready.", {
+                  description:
+                    "Strict sessions can now update the hosts file without another UAC prompt.",
+                });
+              })
+              .catch((error: unknown) => {
+                toast.error("ExecuNow could not prepare the Windows helper.", {
+                  description:
+                    error instanceof Error && error.message.trim()
+                      ? error.message
+                      : typeof error === "string" && error.trim()
+                        ? error
+                        : "Windows did not grant the permission request.",
+                });
+              });
+          }}
         />
       );
       break;

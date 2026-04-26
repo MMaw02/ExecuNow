@@ -28,6 +28,7 @@ test("session starts from valid today state", () => {
   const next = sessionReducer(preparedState, {
     type: "sessionStarted",
     settings: DEFAULT_POMODORO_SETTINGS,
+    startedAtMs: 0,
   });
 
   assert.equal(next.view, "active");
@@ -52,6 +53,7 @@ test("session supports a custom duration", () => {
   const next = sessionReducer(customDurationState, {
     type: "sessionStarted",
     settings: DEFAULT_POMODORO_SETTINGS,
+    startedAtMs: 0,
   });
 
   assert.equal(next.selectedDuration, 35);
@@ -84,6 +86,7 @@ test("widget handoff can start a session immediately", () => {
       duration: 20,
     },
     settings: DEFAULT_POMODORO_SETTINGS,
+    startedAtMs: 0,
   });
 
   assert.equal(next.view, "active");
@@ -95,10 +98,11 @@ test("widget handoff can start a session immediately", () => {
 
 test("pause can only be consumed once", () => {
   const activeState = createActiveState();
-  const pausedState = sessionReducer(activeState, { type: "pauseToggled" });
-  const resumedState = sessionReducer(pausedState, { type: "pauseToggled" });
+  const pausedState = sessionReducer(activeState, { type: "pauseToggled", nowMs: 5_000 });
+  const resumedState = sessionReducer(pausedState, { type: "pauseToggled", nowMs: 8_000 });
   const afterSecondPauseAttempt = sessionReducer(resumedState, {
     type: "pauseToggled",
+    nowMs: 10_000,
   });
 
   assert.equal(pausedState.isPaused, true);
@@ -146,14 +150,18 @@ test("tick moves the session into a break after a completed focus block", () => 
   const activeState = sessionReducer(durationState, {
     type: "sessionStarted",
     settings: DEFAULT_POMODORO_SETTINGS,
+    startedAtMs: 0,
   });
   const almostBreakState = {
     ...activeState,
     remainingSeconds: 1,
     elapsedFocusSeconds: 24 * 60 + 59,
+    elapsedFocusSecondsAtSegmentStart: 0,
+    segmentStartedAtMs: 0,
+    segmentEndsAtMs: 25 * 60 * 1000,
   };
 
-  const next = sessionReducer(almostBreakState, { type: "tick" });
+  const next = sessionReducer(almostBreakState, { type: "tick", nowMs: 25 * 60 * 1000 });
 
   assert.equal(next.view, "active");
   assert.equal(next.sessionPhase, "break");
@@ -169,9 +177,12 @@ test("tick returns from break into the next focus block", () => {
     sessionSegmentIndex: 1,
     remainingSeconds: 1,
     elapsedFocusSeconds: 25 * 60,
+    elapsedFocusSecondsAtSegmentStart: 25 * 60,
+    segmentStartedAtMs: 25 * 60 * 1000,
+    segmentEndsAtMs: 30 * 60 * 1000,
   });
 
-  const next = sessionReducer(breakState, { type: "tick" });
+  const next = sessionReducer(breakState, { type: "tick", nowMs: 30 * 60 * 1000 });
 
   assert.equal(next.view, "active");
   assert.equal(next.sessionPhase, "focus");
@@ -219,6 +230,26 @@ test("navigation locks during active and outcome views", () => {
   assert.equal(canNavigateTo(outcomeState, "outcome"), true);
 });
 
+test("tick catches up to real elapsed time after delayed scheduling", () => {
+  const activeState = createActiveState();
+
+  const next = sessionReducer(activeState, { type: "tick", nowMs: 5_200 });
+
+  assert.equal(next.remainingSeconds, 25 * 60 - 5);
+  assert.equal(next.elapsedFocusSeconds, 5);
+});
+
+test("resuming after pause preserves the remaining time instead of adding drift", () => {
+  const activeState = createActiveState();
+  const pausedState = sessionReducer(activeState, { type: "pauseToggled", nowMs: 5_200 });
+  const resumedState = sessionReducer(pausedState, { type: "pauseToggled", nowMs: 12_800 });
+  const next = sessionReducer(resumedState, { type: "tick", nowMs: 13_900 });
+
+  assert.equal(pausedState.remainingSeconds, 25 * 60 - 5);
+  assert.equal(next.remainingSeconds, 25 * 60 - 6);
+  assert.equal(next.elapsedFocusSeconds, 6);
+});
+
 function createActiveState(overrides: Partial<SessionState> = {}) {
   const initialState = createInitialSessionState();
   const preparedState = sessionReducer(initialState, {
@@ -228,6 +259,7 @@ function createActiveState(overrides: Partial<SessionState> = {}) {
   const normalizedActiveState = sessionReducer(preparedState, {
     type: "sessionStarted",
     settings: DEFAULT_POMODORO_SETTINGS,
+    startedAtMs: 0,
   });
 
   return {

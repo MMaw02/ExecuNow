@@ -16,6 +16,12 @@ import type {
 } from "../../pomodoro/pomodoro.types.ts";
 import type { SessionOutcome } from "../session.types.ts";
 
+const LOCAL_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
 type ActiveSessionViewProps = {
   remainingSeconds: number;
   sessionTask: string;
@@ -67,11 +73,21 @@ export function ActiveSessionView({
   const phaseMinutes = Math.max(Math.round((currentSegment?.durationSeconds ?? 0) / 60), 0);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setLocalTime(new Date());
-    }, 1000);
+    let timerId = 0;
 
-    return () => window.clearInterval(timer);
+    const scheduleUpdate = () => {
+      const now = new Date();
+      const delay =
+        (59 - now.getSeconds()) * 1000 + (1000 - now.getMilliseconds());
+      timerId = window.setTimeout(() => {
+        setLocalTime(new Date());
+        scheduleUpdate();
+      }, Math.max(delay, 250));
+    };
+
+    scheduleUpdate();
+
+    return () => window.clearTimeout(timerId);
   }, []);
 
   const sessionStatusLabel = isPaused
@@ -229,11 +245,7 @@ function MetricPanel({
 }
 
 function formatLocalTime(value: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(value);
+  return LOCAL_TIME_FORMATTER.format(value);
 }
 
 function formatFocusedMinutes(totalMinutes: number) {

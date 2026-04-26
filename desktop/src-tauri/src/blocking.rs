@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(windows)]
+use std::path::PathBuf;
+#[cfg(windows)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MANAGED_SECTION_START: &str = "# ExecuNow managed start";
@@ -8,6 +11,12 @@ const MANAGED_SECTION_END: &str = "# ExecuNow managed end";
 const PROVIDER_NAME: &str = "hosts";
 const APP_STATE_DIR_NAME: &str = "workspacesexecunowdesktop";
 const BLOCKING_STATE_FILE_NAME: &str = "web-blocking-state.json";
+const BLOCKING_PERMISSION_STATE_FILE_NAME: &str = "web-blocking-permission.json";
+const BLOCKING_TASK_REQUEST_FILE_NAME: &str = "web-blocking-task-request.json";
+const BLOCKING_TASK_RESULT_FILE_NAME: &str = "web-blocking-task-result.json";
+const BLOCKING_TASK_NAME: &str = "ExecuNow Web Blocking";
+const BLOCKING_TASK_RUNNER_ARGUMENT: &str = "--execunow-hosts-task-runner";
+const BLOCKING_TASK_INSTALL_ARGUMENT: &str = "--execunow-install-hosts-task";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BlockingApplyPayload {
@@ -32,6 +41,16 @@ pub struct WebBlockingStatus {
     pub blocked_domains: Vec<String>,
     pub blocked_hosts: Vec<String>,
     pub stale: bool,
+    pub permission_granted: bool,
+    pub permission_strategy: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WebBlockingPermissionStatus {
+    pub supported: bool,
+    pub granted: bool,
+    pub strategy: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -39,6 +58,29 @@ struct NativeBlockingState {
     applied: bool,
     domains: Vec<String>,
     updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+struct NativeBlockingPermissionState {
+    granted: bool,
+    executable_path: String,
+    strategy: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct BlockingTaskRequest {
+    request_id: String,
+    operation: String,
+    domains: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct BlockingTaskResult {
+    request_id: String,
+    ok: bool,
+    error: Option<String>,
+    apply_result: Option<BlockingApplyResult>,
 }
 
 trait BlockingProvider {
@@ -57,6 +99,10 @@ pub fn maybe_handle_helper_mode() -> Option<i32> {
             Some(run_hosts_apply_helper(payload_path, result_path))
         }
         [_, command] if command == "--execunow-hosts-clear" => Some(run_hosts_clear_helper()),
+        [_, command] if command == BLOCKING_TASK_RUNNER_ARGUMENT => Some(run_hosts_task_runner()),
+        [_, command] if command == BLOCKING_TASK_INSTALL_ARGUMENT => {
+            Some(run_hosts_task_install_helper())
+        }
         _ => None,
     }
 }
@@ -75,7 +121,7 @@ pub fn apply_web_blocking(domains: Vec<String>) -> Result<BlockingApplyResult, S
             });
         }
 
-        run_elevated_apply_helper(&normalized_domains)
+        run_privileged_apply(&normalized_domains)
     }
 
     #[cfg(not(windows))]
@@ -88,7 +134,7 @@ pub fn apply_web_blocking(domains: Vec<String>) -> Result<BlockingApplyResult, S
 pub fn clear_web_blocking() -> Result<(), String> {
     #[cfg(windows)]
     {
-        run_elevated_clear_helper()
+        run_privileged_clear()
     }
 
     #[cfg(not(windows))]
@@ -101,13 +147,30 @@ pub fn get_web_blocking_status() -> Result<WebBlockingStatus, String> {
     default_provider().status()
 }
 
+pub fn ensure_web_blocking_permission() -> Result<WebBlockingPermissionStatus, String> {
+    #[cfg(windows)]
+    {
+        ensure_scheduled_task_permission()?;
+        get_web_blocking_permission_status()
+    }
+
+    #[cfg(not(windows))]
+    {
+        Ok(WebBlockingPermissionStatus {
+            supported: false,
+            granted: false,
+            strategy: "unsupported".to_string(),
+        })
+    }
+}
+
 pub fn cleanup_stale_web_blocking() -> Result<(), String> {
     #[cfg(windows)]
     {
         let status = default_provider().status()?;
 
-        if status.applied && status.stale {
-            run_elevated_clear_helper()?;
+        if status.applied && status.stale && scheduled_task_permission_ready()? {
+            run_scheduled_task_clear()?;
         }
     }
 
@@ -136,6 +199,8 @@ impl BlockingProvider for HostsProvider {
             blocked_domains: Vec::new(),
             blocked_hosts: Vec::new(),
             stale: false,
+            permission_granted: false,
+            permission_strategy: "unsupported".to_string(),
         })
     }
 }
@@ -184,6 +249,7 @@ impl BlockingProvider for HostsProvider {
         let hosts_contents = read_text_file(&hosts_file_path()?)?;
         let applied = has_managed_section(&hosts_contents);
         let blocked_domains = normalize_domains(&native_state.domains);
+        let permission_status = get_web_blocking_permission_status()?;
 
         Ok(WebBlockingStatus {
             supported: true,
@@ -192,6 +258,8 @@ impl BlockingProvider for HostsProvider {
             blocked_domains: blocked_domains.clone(),
             blocked_hosts: derive_hosts_from_domains(&blocked_domains),
             stale: applied && native_state.applied,
+            permission_granted: permission_status.granted,
+            permission_strategy: permission_status.strategy,
         })
     }
 }
@@ -228,15 +296,150 @@ fn run_elevated_clear_helper() -> Result<(), String> {
 }
 
 #[cfg(windows)]
+fn run_privileged_apply(domains: &[String]) -> Result<BlockingApplyResult, String> {
+    ensure_scheduled_task_permission()?;
+    run_scheduled_task_apply(domains)
+}
+
+#[cfg(windows)]
+fn run_privileged_clear() -> Result<(), String> {
+    ensure_scheduled_task_permission()?;
+    run_scheduled_task_clear()
+}
+
+#[cfg(windows)]
+fn get_web_blocking_permission_status() -> Result<WebBlockingPermissionStatus, String> {
+    let granted = scheduled_task_permission_ready()?;
+
+    Ok(WebBlockingPermissionStatus {
+        supported: true,
+        granted,
+        strategy: if granted {
+            "scheduled-task".to_string()
+        } else {
+            "uac".to_string()
+        },
+    })
+}
+
+#[cfg(windows)]
+fn ensure_scheduled_task_permission() -> Result<(), String> {
+    if scheduled_task_permission_ready()? {
+        return Ok(());
+    }
+
+    run_elevated_helper(&[BLOCKING_TASK_INSTALL_ARGUMENT.to_string()])?;
+
+    if scheduled_task_permission_ready()? {
+        Ok(())
+    } else {
+        Err(
+            "ExecuNow could not prepare its Windows blocking helper. Try granting permission again."
+                .to_string(),
+        )
+    }
+}
+
+#[cfg(windows)]
+fn run_scheduled_task_apply(domains: &[String]) -> Result<BlockingApplyResult, String> {
+    let result = run_scheduled_task_request(BlockingTaskRequest {
+        request_id: create_request_id("apply"),
+        operation: "apply".to_string(),
+        domains: domains.to_vec(),
+    })?;
+
+    result.apply_result.ok_or_else(|| {
+        "ExecuNow did not receive blocking results from the Windows helper.".to_string()
+    })
+}
+
+#[cfg(windows)]
+fn run_scheduled_task_clear() -> Result<(), String> {
+    run_scheduled_task_request(BlockingTaskRequest {
+        request_id: create_request_id("clear"),
+        operation: "clear".to_string(),
+        domains: Vec::new(),
+    })?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn run_scheduled_task_request(request: BlockingTaskRequest) -> Result<BlockingTaskResult, String> {
+    use std::process::Command;
+    use std::thread;
+    use std::time::Duration;
+
+    let request_path = blocking_task_request_path()?;
+    let result_path = blocking_task_result_path()?;
+
+    let _ = fs::remove_file(&result_path);
+    write_json_file(&request_path, &request)?;
+
+    let output = Command::new("schtasks")
+        .args(["/Run", "/TN", BLOCKING_TASK_NAME])
+        .output()
+        .map_err(|error| {
+            format!(
+                "ExecuNow could not start its Windows blocking helper: {}",
+                error
+            )
+        })?;
+
+    if !output.status.success() {
+        reset_scheduled_task_permission_state()?;
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+        return Err(if stderr.is_empty() {
+            "Windows could not start ExecuNow's blocking helper.".to_string()
+        } else {
+            stderr
+        });
+    }
+
+    let deadline_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        + 10_000;
+
+    loop {
+        if let Ok(response) = read_json_file::<BlockingTaskResult>(&result_path) {
+            if response.request_id == request.request_id {
+                let _ = fs::remove_file(&request_path);
+                let _ = fs::remove_file(&result_path);
+
+                if response.ok {
+                    return Ok(response);
+                }
+
+                return Err(response.error.unwrap_or_else(|| {
+                    "ExecuNow's Windows blocking helper returned an empty error.".to_string()
+                }));
+            }
+        }
+
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+
+        if now_ms >= deadline_ms {
+            let _ = fs::remove_file(&request_path);
+            return Err(
+                "ExecuNow timed out while waiting for the Windows blocking helper.".to_string(),
+            );
+        }
+
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[cfg(windows)]
 fn run_elevated_helper(arguments: &[String]) -> Result<(), String> {
     use std::process::Command;
 
-    let executable_path = std::env::current_exe().map_err(|error| {
-        format!(
-            "ExecuNow could not locate its helper executable: {}",
-            error
-        )
-    })?;
+    let executable_path = std::env::current_exe()
+        .map_err(|error| format!("ExecuNow could not locate its helper executable: {}", error))?;
     let script = format!(
         "$process = Start-Process -FilePath '{}' -ArgumentList @({}) -Verb RunAs -Wait -PassThru; exit $process.ExitCode",
         escape_powershell_string(executable_path.to_string_lossy().as_ref()),
@@ -262,6 +465,91 @@ fn run_elevated_helper(arguments: &[String]) -> Result<(), String> {
     } else {
         Err(stderr)
     }
+}
+
+#[cfg(windows)]
+fn run_hosts_task_runner() -> i32 {
+    let request_path = match blocking_task_request_path() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("{}", error);
+            return 1;
+        }
+    };
+    let response = match read_json_file::<BlockingTaskRequest>(&request_path) {
+        Ok(request) => {
+            let execution = match request.operation.as_str() {
+                "apply" => default_provider()
+                    .apply(&request.domains)
+                    .map(|apply_result| BlockingTaskResult {
+                        request_id: request.request_id,
+                        ok: true,
+                        error: None,
+                        apply_result: Some(apply_result),
+                    }),
+                "clear" => default_provider().clear().map(|_| BlockingTaskResult {
+                    request_id: request.request_id,
+                    ok: true,
+                    error: None,
+                    apply_result: None,
+                }),
+                _ => Err("ExecuNow received an unknown Windows blocking task.".to_string()),
+            };
+
+            match execution {
+                Ok(result) => result,
+                Err(error) => BlockingTaskResult {
+                    request_id: request.request_id,
+                    ok: false,
+                    error: Some(error),
+                    apply_result: None,
+                },
+            }
+        }
+        Err(error) => BlockingTaskResult {
+            request_id: create_request_id("invalid"),
+            ok: false,
+            error: Some(error),
+            apply_result: None,
+        },
+    };
+
+    let result_path = match blocking_task_result_path() {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("{}", error);
+            return 1;
+        }
+    };
+
+    match write_json_file(&result_path, &response) {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+#[cfg(windows)]
+fn run_hosts_task_install_helper() -> i32 {
+    match install_hosts_task() {
+        Ok(()) => 0,
+        Err(error) => {
+            eprintln!("{}", error);
+            1
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn run_hosts_task_runner() -> i32 {
+    1
+}
+
+#[cfg(not(windows))]
+fn run_hosts_task_install_helper() -> i32 {
+    1
 }
 
 #[cfg(windows)]
@@ -300,6 +588,51 @@ fn run_hosts_clear_helper() -> i32 {
     }
 }
 
+#[cfg(windows)]
+fn install_hosts_task() -> Result<(), String> {
+    use std::process::Command;
+
+    let executable_path = std::env::current_exe()
+        .map_err(|error| format!("ExecuNow could not locate its helper executable: {}", error))?;
+    let script = format!(
+        "$taskName = '{}'; \
+        $action = New-ScheduledTaskAction -Execute '{}' -Argument '{}'; \
+        $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \
+        $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType InteractiveToken -RunLevel Highest; \
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; \
+        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null",
+        escape_powershell_string(BLOCKING_TASK_NAME),
+        escape_powershell_string(executable_path.to_string_lossy().as_ref()),
+        escape_powershell_string(BLOCKING_TASK_RUNNER_ARGUMENT),
+    );
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+        .map_err(|error| {
+            format!(
+                "ExecuNow could not register its Windows blocking helper: {}",
+                error
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+        return Err(if stderr.is_empty() {
+            "Windows could not register ExecuNow's blocking helper.".to_string()
+        } else {
+            stderr
+        });
+    }
+
+    write_native_blocking_permission_state(&NativeBlockingPermissionState {
+        granted: true,
+        executable_path: executable_path.to_string_lossy().to_string(),
+        strategy: "scheduled-task".to_string(),
+        updated_at: current_timestamp(),
+    })
+}
+
 #[cfg(not(windows))]
 fn run_hosts_clear_helper() -> i32 {
     0
@@ -315,7 +648,10 @@ fn normalize_domains(domains: &[String]) -> Vec<String> {
             continue;
         }
 
-        if !normalized_domains.iter().any(|existing| existing == &trimmed) {
+        if !normalized_domains
+            .iter()
+            .any(|existing| existing == &trimmed)
+        {
             normalized_domains.push(trimmed);
         }
     }
@@ -331,7 +667,10 @@ fn derive_hosts_from_domains(domains: &[String]) -> Vec<String> {
 
         let www_variant = format!("www.{}", domain);
 
-        if !blocked_hosts.iter().any(|existing| existing == &www_variant) {
+        if !blocked_hosts
+            .iter()
+            .any(|existing| existing == &www_variant)
+        {
             blocked_hosts.push(www_variant);
         }
     }
@@ -406,7 +745,8 @@ fn strip_managed_section(existing_contents: &str) -> String {
 }
 
 fn has_managed_section(existing_contents: &str) -> bool {
-    existing_contents.contains(MANAGED_SECTION_START) && existing_contents.contains(MANAGED_SECTION_END)
+    existing_contents.contains(MANAGED_SECTION_START)
+        && existing_contents.contains(MANAGED_SECTION_END)
 }
 
 fn trailing_newline(contents: &str) -> String {
@@ -451,8 +791,12 @@ fn is_valid_hostname(value: &str) -> bool {
             return false;
         }
 
-        if !characters.first().is_some_and(|character| character.is_ascii_alphanumeric())
-            || !characters.last().is_some_and(|character| character.is_ascii_alphanumeric())
+        if !characters
+            .first()
+            .is_some_and(|character| character.is_ascii_alphanumeric())
+            || !characters
+                .last()
+                .is_some_and(|character| character.is_ascii_alphanumeric())
         {
             return false;
         }
@@ -483,8 +827,12 @@ fn app_state_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| "Windows app data directory is unavailable.".to_string())?;
     let app_state_dir = PathBuf::from(base_dir).join(APP_STATE_DIR_NAME);
 
-    fs::create_dir_all(&app_state_dir)
-        .map_err(|error| format!("ExecuNow could not prepare its app data directory: {}", error))?;
+    fs::create_dir_all(&app_state_dir).map_err(|error| {
+        format!(
+            "ExecuNow could not prepare its app data directory: {}",
+            error
+        )
+    })?;
 
     Ok(app_state_dir)
 }
@@ -511,6 +859,84 @@ fn write_native_blocking_state(state: &NativeBlockingState) -> Result<(), String
 }
 
 #[cfg(windows)]
+fn native_blocking_permission_state_path() -> Result<PathBuf, String> {
+    Ok(app_state_dir()?.join(BLOCKING_PERMISSION_STATE_FILE_NAME))
+}
+
+#[cfg(windows)]
+fn blocking_task_request_path() -> Result<PathBuf, String> {
+    Ok(app_state_dir()?.join(BLOCKING_TASK_REQUEST_FILE_NAME))
+}
+
+#[cfg(windows)]
+fn blocking_task_result_path() -> Result<PathBuf, String> {
+    Ok(app_state_dir()?.join(BLOCKING_TASK_RESULT_FILE_NAME))
+}
+
+#[cfg(windows)]
+fn read_native_blocking_permission_state() -> Result<NativeBlockingPermissionState, String> {
+    let state_path = native_blocking_permission_state_path()?;
+
+    if !state_path.exists() {
+        return Ok(NativeBlockingPermissionState::default());
+    }
+
+    read_json_file(&state_path)
+}
+
+#[cfg(windows)]
+fn write_native_blocking_permission_state(
+    state: &NativeBlockingPermissionState,
+) -> Result<(), String> {
+    write_json_file(&native_blocking_permission_state_path()?, state)
+}
+
+#[cfg(windows)]
+fn reset_scheduled_task_permission_state() -> Result<(), String> {
+    write_native_blocking_permission_state(&NativeBlockingPermissionState {
+        granted: false,
+        executable_path: String::new(),
+        strategy: "uac".to_string(),
+        updated_at: current_timestamp(),
+    })
+}
+
+#[cfg(windows)]
+fn scheduled_task_permission_ready() -> Result<bool, String> {
+    let permission_state = read_native_blocking_permission_state().unwrap_or_default();
+
+    if !permission_state.granted {
+        return Ok(false);
+    }
+
+    let executable_path = std::env::current_exe()
+        .map_err(|error| format!("ExecuNow could not locate its helper executable: {}", error))?;
+
+    if permission_state.executable_path != executable_path.to_string_lossy() {
+        return Ok(false);
+    }
+
+    scheduled_task_exists()
+}
+
+#[cfg(windows)]
+fn scheduled_task_exists() -> Result<bool, String> {
+    use std::process::Command;
+
+    let output = Command::new("schtasks")
+        .args(["/Query", "/TN", BLOCKING_TASK_NAME])
+        .output()
+        .map_err(|error| {
+            format!(
+                "ExecuNow could not check its Windows blocking helper: {}",
+                error
+            )
+        })?;
+
+    Ok(output.status.success())
+}
+
+#[cfg(windows)]
 fn unique_temp_path(prefix: &str, extension: &str) -> PathBuf {
     let epoch_millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -524,6 +950,16 @@ fn unique_temp_path(prefix: &str, extension: &str) -> PathBuf {
         epoch_millis,
         extension
     ))
+}
+
+#[cfg(windows)]
+fn create_request_id(prefix: &str) -> String {
+    let epoch_millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+
+    format!("{}-{}-{}", prefix, std::process::id(), epoch_millis)
 }
 
 #[cfg(windows)]
@@ -600,7 +1036,8 @@ mod tests {
 
     #[test]
     fn managed_section_renders_stable_markers() {
-        let rendered = render_managed_section(&["youtube.com".to_string(), "www.youtube.com".to_string()]);
+        let rendered =
+            render_managed_section(&["youtube.com".to_string(), "www.youtube.com".to_string()]);
 
         assert!(rendered.contains(MANAGED_SECTION_START));
         assert!(rendered.contains("0.0.0.0 youtube.com"));

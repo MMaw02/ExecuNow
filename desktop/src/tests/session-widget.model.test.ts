@@ -22,8 +22,9 @@ test("session widget snapshot mirrors active session state", () => {
   const activeState = sessionReducer(preparedState, {
     type: "sessionStarted",
     settings: DEFAULT_POMODORO_SETTINGS,
+    startedAtMs: 0,
   });
-  const pausedState = sessionReducer(activeState, { type: "pauseToggled" });
+  const pausedState = sessionReducer(activeState, { type: "pauseToggled", nowMs: 5_000 });
 
   const snapshot = createSessionWidgetSnapshot(pausedState);
 

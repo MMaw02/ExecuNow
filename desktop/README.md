@@ -119,8 +119,9 @@ To use it on Windows:
 To remove the portable app, close ExecuNow and delete the folder.
 
 ExecuNow's web blocking feature updates the Windows `hosts` file while a block
-is active, so Windows may show a UAC administrator prompt when that feature is
-used. This is expected for the portable build too.
+is active. The first time you arm the Windows helper, the app may show a UAC
+administrator prompt so it can register its elevated background task. After
+that, future strict sessions should reuse the helper without another prompt.
 
 ## Tests
 

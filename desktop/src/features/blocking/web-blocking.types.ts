@@ -24,4 +24,12 @@ export type WebBlockingStatus = {
   blockedDomains: string[];
   blockedHosts: string[];
   stale: boolean;
+  permissionGranted: boolean;
+  permissionStrategy: string;
+};
+
+export type WebBlockingPermissionStatus = {
+  supported: boolean;
+  granted: boolean;
+  strategy: string;
 };

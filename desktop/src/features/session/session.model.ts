@@ -35,8 +35,12 @@ export function createInitialSessionState(): SessionState {
     sessionPhase: "focus",
     sessionSegmentIndex: 0,
     elapsedFocusSeconds: 0,
+    elapsedFocusSecondsAtSegmentStart: 0,
     remainingSeconds: DEFAULT_DURATION * 60,
+    segmentStartedAtMs: null,
+    segmentEndsAtMs: null,
     isPaused: false,
+    pausedAtMs: null,
     pauseUsed: false,
     sessionResult: null,
     failureReason: "",
@@ -75,8 +79,12 @@ export function sessionReducer(
         sessionPhase: "focus",
         sessionSegmentIndex: 0,
         elapsedFocusSeconds: 0,
+        elapsedFocusSecondsAtSegmentStart: 0,
         remainingSeconds: draft.duration * 60,
+        segmentStartedAtMs: null,
+        segmentEndsAtMs: null,
         isPaused: false,
+        pausedAtMs: null,
         pauseUsed: false,
         sessionResult: null,
         failureReason: "",
@@ -86,6 +94,8 @@ export function sessionReducer(
       const draft = normalizeSessionTaskDraft(action.value);
       const sessionPomodoroSettings = normalizePomodoroSettings(action.settings);
       const timeline = getPomodoroSessionTimeline(draft.duration, sessionPomodoroSettings);
+      const firstSegment = timeline.segments[0];
+      const startedAtMs = normalizeNowMs(action.startedAtMs);
 
       return {
         ...state,
@@ -95,11 +105,17 @@ export function sessionReducer(
         sessionTask: draft.title,
         sessionDuration: draft.duration,
         sessionPomodoroSettings,
-        sessionPhase: timeline.segments[0]?.phase ?? "focus",
+        sessionPhase: firstSegment?.phase ?? "focus",
         sessionSegmentIndex: 0,
         elapsedFocusSeconds: 0,
-        remainingSeconds: timeline.segments[0]?.durationSeconds ?? draft.duration * 60,
+        elapsedFocusSecondsAtSegmentStart: 0,
+        remainingSeconds: firstSegment?.durationSeconds ?? draft.duration * 60,
+        segmentStartedAtMs: firstSegment ? startedAtMs : null,
+        segmentEndsAtMs: firstSegment
+          ? startedAtMs + firstSegment.durationSeconds * 1000
+          : null,
         isPaused: false,
+        pausedAtMs: null,
         pauseUsed: false,
         sessionResult: null,
         failureReason: "",
@@ -126,6 +142,8 @@ export function sessionReducer(
 
       const sessionPomodoroSettings = normalizePomodoroSettings(action.settings);
       const timeline = getPomodoroSessionTimeline(state.selectedDuration, sessionPomodoroSettings);
+      const firstSegment = timeline.segments[0];
+      const startedAtMs = normalizeNowMs(action.startedAtMs);
 
       return {
         ...state,
@@ -133,12 +151,17 @@ export function sessionReducer(
         sessionTask: state.taskTitle.trim(),
         sessionDuration: state.selectedDuration,
         sessionPomodoroSettings,
-        sessionPhase: timeline.segments[0]?.phase ?? "focus",
+        sessionPhase: firstSegment?.phase ?? "focus",
         sessionSegmentIndex: 0,
         elapsedFocusSeconds: 0,
-        remainingSeconds:
-          timeline.segments[0]?.durationSeconds ?? state.selectedDuration * 60,
+        elapsedFocusSecondsAtSegmentStart: 0,
+        remainingSeconds: firstSegment?.durationSeconds ?? state.selectedDuration * 60,
+        segmentStartedAtMs: firstSegment ? startedAtMs : null,
+        segmentEndsAtMs: firstSegment
+          ? startedAtMs + firstSegment.durationSeconds * 1000
+          : null,
         isPaused: false,
+        pausedAtMs: null,
         pauseUsed: false,
         sessionResult: null,
         failureReason: "",
@@ -149,20 +172,25 @@ export function sessionReducer(
         return state;
       }
 
+      const nowMs = normalizeNowMs(action.nowMs);
       if (state.isPaused) {
-        return {
-          ...state,
-          isPaused: false,
-        };
+        return resumePausedSession(state, nowMs);
       }
 
-      if (state.pauseUsed) {
-        return state;
+      const syncedState = advanceActiveSession(state, nowMs);
+
+      if (syncedState.view !== "active") {
+        return syncedState;
+      }
+
+      if (syncedState.pauseUsed) {
+        return syncedState;
       }
 
       return {
-        ...state,
+        ...syncedState,
         isPaused: true,
+        pausedAtMs: nowMs,
         pauseUsed: true,
       };
     case "sessionClosed":
@@ -170,7 +198,10 @@ export function sessionReducer(
         ...state,
         view: "outcome",
         sessionResult: action.value,
+        segmentStartedAtMs: null,
+        segmentEndsAtMs: null,
         isPaused: false,
+        pausedAtMs: null,
       };
     case "sessionResultSelected":
       return {
@@ -200,8 +231,12 @@ export function sessionReducer(
         sessionPhase: "focus",
         sessionSegmentIndex: 0,
         elapsedFocusSeconds: 0,
+        elapsedFocusSecondsAtSegmentStart: 0,
         remainingSeconds: state.selectedDuration * 60,
+        segmentStartedAtMs: null,
+        segmentEndsAtMs: null,
         isPaused: false,
+        pausedAtMs: null,
         pauseUsed: false,
         sessionResult: null,
         failureReason: "",
@@ -218,54 +253,7 @@ export function sessionReducer(
         return state;
       }
 
-      const timeline = getPomodoroSessionTimeline(
-        state.sessionDuration,
-        state.sessionPomodoroSettings,
-      );
-      const currentSegment = timeline.segments[state.sessionSegmentIndex];
-
-      if (!currentSegment) {
-        return {
-          ...state,
-          view: "outcome",
-          sessionResult: "completed",
-          isPaused: false,
-          remainingSeconds: 0,
-        };
-      }
-
-      const nextRemainingSeconds = Math.max(state.remainingSeconds - 1, 0);
-      const elapsedFocusSeconds =
-        state.elapsedFocusSeconds + (currentSegment.phase === "focus" ? 1 : 0);
-
-      if (nextRemainingSeconds > 0) {
-        return {
-          ...state,
-          elapsedFocusSeconds,
-          remainingSeconds: nextRemainingSeconds,
-        };
-      }
-
-      const nextSegment = timeline.segments[state.sessionSegmentIndex + 1];
-
-      if (!nextSegment) {
-        return {
-          ...state,
-          elapsedFocusSeconds,
-          remainingSeconds: 0,
-          view: "outcome",
-          sessionResult: "completed",
-          isPaused: false,
-        };
-      }
-
-      return {
-        ...state,
-        elapsedFocusSeconds,
-        sessionPhase: nextSegment.phase,
-        sessionSegmentIndex: state.sessionSegmentIndex + 1,
-        remainingSeconds: nextSegment.durationSeconds,
-      };
+      return advanceActiveSession(state, normalizeNowMs(action.nowMs));
     }
     default:
       return assertNever(action);
@@ -325,6 +313,141 @@ function getCapturedMinutesForSave(state: SessionState) {
   return state.sessionResult === "completed"
     ? state.sessionDuration
     : getElapsedMinutes(state);
+}
+
+function advanceActiveSession(state: SessionState, nowMs: number): SessionState {
+  const timeline = getPomodoroSessionTimeline(
+    state.sessionDuration,
+    state.sessionPomodoroSettings,
+  );
+  let segmentIndex = state.sessionSegmentIndex;
+  let currentSegment = timeline.segments[segmentIndex];
+
+  if (!currentSegment) {
+    return completeSession(state, state.elapsedFocusSeconds);
+  }
+
+  let {
+    elapsedFocusSecondsAtSegmentStart,
+    segmentEndsAtMs,
+    segmentStartedAtMs,
+  } = resolveSegmentTiming(state, currentSegment, nowMs);
+
+  while (nowMs >= segmentEndsAtMs) {
+    const elapsedFocusSecondsAtSegmentEnd =
+      currentSegment.phase === "focus"
+        ? elapsedFocusSecondsAtSegmentStart + currentSegment.durationSeconds
+        : elapsedFocusSecondsAtSegmentStart;
+    const nextSegment = timeline.segments[segmentIndex + 1];
+
+    if (!nextSegment) {
+      return completeSession(state, elapsedFocusSecondsAtSegmentEnd);
+    }
+
+    segmentIndex += 1;
+    currentSegment = nextSegment;
+    elapsedFocusSecondsAtSegmentStart = elapsedFocusSecondsAtSegmentEnd;
+    segmentStartedAtMs = segmentEndsAtMs;
+    segmentEndsAtMs = segmentStartedAtMs + currentSegment.durationSeconds * 1000;
+  }
+
+  const elapsedInSegmentSeconds =
+    currentSegment.phase === "focus"
+      ? Math.min(
+          currentSegment.durationSeconds,
+          Math.max(Math.floor((nowMs - segmentStartedAtMs) / 1000), 0),
+        )
+      : 0;
+
+  return {
+    ...state,
+    sessionPhase: currentSegment.phase,
+    sessionSegmentIndex: segmentIndex,
+    elapsedFocusSeconds:
+      elapsedFocusSecondsAtSegmentStart + elapsedInSegmentSeconds,
+    elapsedFocusSecondsAtSegmentStart,
+    remainingSeconds: Math.max(Math.ceil((segmentEndsAtMs - nowMs) / 1000), 0),
+    segmentStartedAtMs,
+    segmentEndsAtMs,
+    pausedAtMs: null,
+  };
+}
+
+function completeSession(
+  state: SessionState,
+  elapsedFocusSeconds: number,
+): SessionState {
+  return {
+    ...state,
+    elapsedFocusSeconds,
+    elapsedFocusSecondsAtSegmentStart: elapsedFocusSeconds,
+    remainingSeconds: 0,
+    segmentStartedAtMs: null,
+    segmentEndsAtMs: null,
+    isPaused: false,
+    pausedAtMs: null,
+    view: "outcome",
+    sessionResult: "completed",
+  };
+}
+
+function resolveSegmentTiming(
+  state: SessionState,
+  currentSegment: {
+    durationSeconds: number;
+    phase: SessionState["sessionPhase"];
+  },
+  nowMs: number,
+) {
+  if (state.segmentStartedAtMs !== null && state.segmentEndsAtMs !== null) {
+    return {
+      segmentStartedAtMs: state.segmentStartedAtMs,
+      segmentEndsAtMs: state.segmentEndsAtMs,
+      elapsedFocusSecondsAtSegmentStart: state.elapsedFocusSecondsAtSegmentStart,
+    };
+  }
+
+  const elapsedWithinSegmentSeconds = Math.max(
+    currentSegment.durationSeconds - state.remainingSeconds,
+    0,
+  );
+
+  return {
+    segmentStartedAtMs: nowMs - elapsedWithinSegmentSeconds * 1000,
+    segmentEndsAtMs: nowMs + state.remainingSeconds * 1000,
+    elapsedFocusSecondsAtSegmentStart:
+      currentSegment.phase === "focus"
+        ? Math.max(state.elapsedFocusSeconds - elapsedWithinSegmentSeconds, 0)
+        : state.elapsedFocusSeconds,
+  };
+}
+
+function resumePausedSession(state: SessionState, nowMs: number): SessionState {
+  if (
+    state.segmentStartedAtMs === null ||
+    state.segmentEndsAtMs === null ||
+    state.pausedAtMs === null
+  ) {
+    return {
+      ...state,
+      isPaused: false,
+      pausedAtMs: null,
+    };
+  }
+
+  const pausedDurationMs = Math.max(nowMs - state.pausedAtMs, 0);
+
+  return {
+    ...state,
+    isPaused: false,
+    pausedAtMs: null,
+    segmentStartedAtMs: state.segmentStartedAtMs + pausedDurationMs,
+    segmentEndsAtMs: state.segmentEndsAtMs + pausedDurationMs,
+  };
+}
+
+function normalizeNowMs(value: number | undefined) {
+  return Number.isFinite(value) ? Math.trunc(value as number) : Date.now();
 }
 
 function normalizeSessionTaskDraft(draft: SessionTaskDraft): SessionTaskDraft {

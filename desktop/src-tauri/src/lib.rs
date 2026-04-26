@@ -22,6 +22,11 @@ fn get_web_blocking_status() -> Result<blocking::WebBlockingStatus, String> {
 }
 
 #[tauri::command]
+fn ensure_web_blocking_permission() -> Result<blocking::WebBlockingPermissionStatus, String> {
+    blocking::ensure_web_blocking_permission()
+}
+
+#[tauri::command]
 fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     widget_windows::show_main_window(&app)
 }
@@ -72,6 +77,7 @@ pub fn run() {
             apply_web_blocking,
             clear_web_blocking,
             get_web_blocking_status,
+            ensure_web_blocking_permission,
             show_main_window,
             show_startup_widget_window,
             show_session_widget_window,

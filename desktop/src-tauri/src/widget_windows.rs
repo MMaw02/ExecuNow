@@ -1,18 +1,15 @@
 use serde::Deserialize;
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 use tauri::{
-    AppHandle, Manager, PhysicalPosition, Position, WebviewUrl, WebviewWindow,
-    WebviewWindowBuilder,
+    AppHandle, Manager, PhysicalPosition, Position, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 #[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{
-    BringWindowToTop, SetForegroundWindow, SetWindowPos, ShowWindow, HWND_NOTOPMOST,
-    HWND_TOPMOST, SWP_ASYNCWINDOWPOS, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
-    SWP_SHOWWINDOW, SW_SHOWNORMAL,
+    BringWindowToTop, SetForegroundWindow, SetWindowPos, ShowWindow, HWND_NOTOPMOST, HWND_TOPMOST,
+    SWP_ASYNCWINDOWPOS, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_SHOWWINDOW, SW_SHOWNORMAL,
 };
 
 pub const MAIN_WINDOW_LABEL: &str = "main";
@@ -236,16 +233,17 @@ pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
         .get_webview_window(MAIN_WINDOW_LABEL)
         .ok_or_else(|| "main window not found".to_string())?;
 
-    if main_window.is_minimized().map_err(|error| error.to_string())? {
+    if main_window
+        .is_minimized()
+        .map_err(|error| error.to_string())?
+    {
         main_window
             .unminimize()
             .map_err(|error| error.to_string())?;
     }
 
     main_window.show().map_err(|error| error.to_string())?;
-    main_window
-        .set_focus()
-        .map_err(|error| error.to_string())?;
+    main_window.set_focus().map_err(|error| error.to_string())?;
 
     hide_auxiliary_window(app, STARTUP_WIDGET_LABEL)?;
     hide_auxiliary_window(app, SESSION_WIDGET_LABEL)?;
@@ -360,10 +358,7 @@ fn position_session_widget(
         .map_err(|error| error.to_string())
 }
 
-fn resolve_window_config(
-    app: &AppHandle,
-    target: WidgetWindowTarget,
-) -> AuxiliaryWindowConfig {
+fn resolve_window_config(app: &AppHandle, target: WidgetWindowTarget) -> AuxiliaryWindowConfig {
     resolve_window_config_from_sources(
         target,
         &[
@@ -413,11 +408,9 @@ fn load_window_override_from_dir(
 }
 
 fn build_window_override_path(config_directory: &Path, label: &str) -> PathBuf {
-    config_directory.join(WIDGET_OVERRIDE_DIRECTORY).join(format!(
-        "{}.{}.json",
-        label,
-        env::consts::OS
-    ))
+    config_directory
+        .join(WIDGET_OVERRIDE_DIRECTORY)
+        .join(format!("{}.{}.json", label, env::consts::OS))
 }
 
 fn portable_config_directory() -> Option<PathBuf> {
@@ -478,11 +471,7 @@ fn reinforce_widget_priority_windows(
             0,
             0,
             0,
-            SWP_ASYNCWINDOWPOS
-                | SWP_NOMOVE
-                | SWP_NOSIZE
-                | SWP_NOOWNERZORDER
-                | SWP_SHOWWINDOW,
+            SWP_ASYNCWINDOWPOS | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW,
         );
         let _ = BringWindowToTop(hwnd);
 
@@ -576,7 +565,10 @@ mod tests {
 
         let config = resolve_window_config_from_sources(
             WidgetWindowTarget::Session,
-            &[Some(app_config_dir.clone()), Some(portable_config_dir.clone())],
+            &[
+                Some(app_config_dir.clone()),
+                Some(portable_config_dir.clone()),
+            ],
         );
 
         assert_eq!(config.title, "App Config Session");
@@ -594,10 +586,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = env::temp_dir().join(format!(
-            "execunow-widget-config-test-{}-{}",
-            now, suffix
-        ));
+        let path = env::temp_dir().join(format!("execunow-widget-config-test-{}-{}", now, suffix));
 
         fs::create_dir_all(&path).unwrap();
 

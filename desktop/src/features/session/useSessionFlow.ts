@@ -41,11 +41,23 @@ export function useSessionFlow() {
       return;
     }
 
-    const timer = window.setInterval(() => {
-      dispatch({ type: "tick" });
-    }, 1000);
+    let timerId = 0;
 
-    return () => window.clearInterval(timer);
+    const scheduleTick = () => {
+      const nowMs = Date.now();
+      dispatch({ type: "tick", nowMs });
+      timerId = window.setTimeout(
+        scheduleTick,
+        Math.max(50, 1000 - (nowMs % 1000)),
+      );
+    };
+
+    timerId = window.setTimeout(
+      scheduleTick,
+      Math.max(50, 1000 - (Date.now() % 1000)),
+    );
+
+    return () => window.clearTimeout(timerId);
   }, [state.view, state.isPaused]);
 
   useEffect(() => {
@@ -106,7 +118,12 @@ export function useSessionFlow() {
           return;
         }
 
-        dispatch({ type: "sessionStartedFromWidget", value, settings: pomodoroSettings });
+        dispatch({
+          type: "sessionStartedFromWidget",
+          value,
+          settings: pomodoroSettings,
+          startedAtMs: Date.now(),
+        });
       },
       toggleStrictBlocking() {
         dispatch({ type: "strictBlockingToggled" });
@@ -118,10 +135,14 @@ export function useSessionFlow() {
           return;
         }
 
-        dispatch({ type: "sessionStarted", settings: pomodoroSettings });
+        dispatch({
+          type: "sessionStarted",
+          settings: pomodoroSettings,
+          startedAtMs: Date.now(),
+        });
       },
       togglePause() {
-        dispatch({ type: "pauseToggled" });
+        dispatch({ type: "pauseToggled", nowMs: Date.now() });
       },
       closeSession(result: SessionOutcome) {
         dispatch({ type: "sessionClosed", value: result });

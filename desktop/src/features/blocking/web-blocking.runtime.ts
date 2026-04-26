@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { isTauriRuntime } from "../widget/widget.runtime.ts";
 import type {
   BlockingApplyResult,
+  WebBlockingPermissionStatus,
   WebBlockingStatus,
 } from "./web-blocking.types.ts";
 
@@ -12,6 +13,8 @@ const UNSUPPORTED_STATUS: WebBlockingStatus = {
   blockedDomains: [],
   blockedHosts: [],
   stale: false,
+  permissionGranted: false,
+  permissionStrategy: "unsupported",
 };
 
 export async function applyWebBlocking(
@@ -45,4 +48,16 @@ export async function getWebBlockingStatus() {
   }
 
   return invoke<WebBlockingStatus>("get_web_blocking_status");
+}
+
+export async function ensureWebBlockingPermission() {
+  if (!isTauriRuntime()) {
+    return {
+      supported: false,
+      granted: false,
+      strategy: "unsupported",
+    } satisfies WebBlockingPermissionStatus;
+  }
+
+  return invoke<WebBlockingPermissionStatus>("ensure_web_blocking_permission");
 }
