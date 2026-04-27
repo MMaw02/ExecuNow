@@ -119,7 +119,7 @@ export function BlockingSettingsView({
                 ? "This helper is only needed on Windows."
                 : permissionGranted
                   ? "The elevated helper is ready. Future strict sessions can start without another Windows permission prompt."
-                  : "ExecuNow still needs one administrator approval to prepare the background helper for silent blocking."}
+                  : "Grant this here once first. Strict sessions will stay blocked until the helper is ready instead of opening UAC during start."}
             </p>
           </div>
 

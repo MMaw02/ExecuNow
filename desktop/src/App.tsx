@@ -204,7 +204,15 @@ function App() {
           onGrantPermission={() => {
             void webBlockingPermission
               .grant()
-              .then(() => {
+              .then((status) => {
+                if (!status.permissionGranted) {
+                  toast.error("ExecuNow could not prepare the Windows helper.", {
+                    description:
+                      "Windows still reports the helper as unavailable. Try the grant step again.",
+                  });
+                  return;
+                }
+
                 toast.success("Windows blocking helper is ready.", {
                   description:
                     "Strict sessions can now update the hosts file without another UAC prompt.",

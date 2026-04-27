@@ -297,13 +297,19 @@ fn run_elevated_clear_helper() -> Result<(), String> {
 
 #[cfg(windows)]
 fn run_privileged_apply(domains: &[String]) -> Result<BlockingApplyResult, String> {
-    ensure_scheduled_task_permission()?;
+    if !scheduled_task_permission_ready()? {
+        return Err(blocking_permission_required_error());
+    }
+
     run_scheduled_task_apply(domains)
 }
 
 #[cfg(windows)]
 fn run_privileged_clear() -> Result<(), String> {
-    ensure_scheduled_task_permission()?;
+    if !scheduled_task_permission_ready()? {
+        return Err(blocking_permission_required_error());
+    }
+
     run_scheduled_task_clear()
 }
 
@@ -390,7 +396,7 @@ fn run_scheduled_task_request(request: BlockingTaskRequest) -> Result<BlockingTa
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
 
         return Err(if stderr.is_empty() {
-            "Windows could not start ExecuNow's blocking helper.".to_string()
+            blocking_permission_required_error()
         } else {
             stderr
         });
@@ -450,7 +456,14 @@ fn run_elevated_helper(arguments: &[String]) -> Result<(), String> {
             .join(", ")
     );
     let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            &script,
+        ])
         .output()
         .map_err(|error| format!("ExecuNow could not request Windows elevation: {}", error))?;
 
@@ -461,7 +474,7 @@ fn run_elevated_helper(arguments: &[String]) -> Result<(), String> {
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
 
     if stderr.is_empty() {
-        Err("Windows did not allow ExecuNow to update the hosts file.".to_string())
+        Err("Windows did not grant ExecuNow administrator access.".to_string())
     } else {
         Err(stderr)
     }
@@ -595,19 +608,26 @@ fn install_hosts_task() -> Result<(), String> {
 
     let executable_path = std::env::current_exe()
         .map_err(|error| format!("ExecuNow could not locate its helper executable: {}", error))?;
-    let script = format!(
-        "$taskName = '{}'; \
-        $action = New-ScheduledTaskAction -Execute '{}' -Argument '{}'; \
-        $userId = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name; \
-        $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType InteractiveToken -RunLevel Highest; \
-        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable; \
-        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null",
-        escape_powershell_string(BLOCKING_TASK_NAME),
-        escape_powershell_string(executable_path.to_string_lossy().as_ref()),
-        escape_powershell_string(BLOCKING_TASK_RUNNER_ARGUMENT),
+    let task_command = format!(
+        "\"{}\" {}",
+        executable_path.to_string_lossy(),
+        BLOCKING_TASK_RUNNER_ARGUMENT
     );
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+    let output = Command::new("schtasks")
+        .args([
+            "/Create",
+            "/TN",
+            BLOCKING_TASK_NAME,
+            "/TR",
+            &task_command,
+            "/SC",
+            "ONCE",
+            "/ST",
+            "00:00",
+            "/RL",
+            "HIGHEST",
+            "/F",
+        ])
         .output()
         .map_err(|error| {
             format!(
@@ -618,11 +638,14 @@ fn install_hosts_task() -> Result<(), String> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-        return Err(if stderr.is_empty() {
-            "Windows could not register ExecuNow's blocking helper.".to_string()
-        } else {
+        return Err(if !stderr.is_empty() {
             stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            "Windows could not register ExecuNow's blocking helper.".to_string()
         });
     }
 
@@ -935,6 +958,11 @@ fn scheduled_task_exists() -> Result<bool, String> {
         })?;
 
     Ok(output.status.success())
+}
+
+#[cfg(windows)]
+fn blocking_permission_required_error() -> String {
+    "Windows blocking permission is not ready yet. Open Blocking and click Grant once before starting a strict session.".to_string()
 }
 
 #[cfg(windows)]

@@ -37,7 +37,7 @@ export function useWebBlockingPermission() {
 
       try {
         await ensureWebBlockingPermission();
-        await refreshStatus();
+        return await refreshStatus();
       } finally {
         setGranting(false);
       }
@@ -48,7 +48,9 @@ export function useWebBlockingPermission() {
     setLoading(true);
 
     try {
-      setStatus(await getWebBlockingStatus());
+      const nextStatus = await getWebBlockingStatus();
+      setStatus(nextStatus);
+      return nextStatus;
     } finally {
       setLoading(false);
     }
