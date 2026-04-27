@@ -36,6 +36,7 @@ export function useWebBlockingPermission() {
       setGranting(true);
 
       try {
+        await waitForNextPaint();
         await ensureWebBlockingPermission();
         return await refreshStatus();
       } finally {
@@ -55,4 +56,10 @@ export function useWebBlockingPermission() {
       setLoading(false);
     }
   }
+}
+
+function waitForNextPaint() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
 }

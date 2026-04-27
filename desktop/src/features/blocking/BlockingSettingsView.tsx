@@ -6,6 +6,7 @@ import { Button } from "../../shared/components/ui/button.tsx";
 import { Card, CardContent } from "../../shared/components/ui/card.tsx";
 import { Input } from "../../shared/components/ui/input.tsx";
 import { Label } from "../../shared/components/ui/label.tsx";
+import { Spinner } from "../../shared/components/ui/spinner.tsx";
 import {
   emptyPanelClassName,
   eyebrowClassName,
@@ -125,11 +126,16 @@ export function BlockingSettingsView({
 
           <div className="flex items-center gap-3">
             <Badge variant={permissionGranted ? "info" : "warning"}>
-              {permissionLoading
-                ? "Checking"
-                : permissionGranted
-                  ? "Ready"
-                  : "Needs approval"}
+              {permissionLoading || permissionGranting ? (
+                <>
+                  <Spinner className="size-3.5" />
+                  {permissionGranting ? "Preparing" : "Checking"}
+                </>
+              ) : permissionGranted ? (
+                "Ready"
+              ) : (
+                "Needs approval"
+              )}
             </Badge>
             <Button
               variant="outline"
@@ -137,7 +143,12 @@ export function BlockingSettingsView({
               onClick={onGrantPermission}
               disabled={!permissionSupported || permissionGranting}
             >
-              {permissionGranted ? "Refresh helper" : "Grant once"}
+              {permissionGranting ? <Spinner className="size-4" /> : null}
+              {permissionGranting
+                ? "Preparing..."
+                : permissionGranted
+                  ? "Refresh helper"
+                  : "Grant once"}
             </Button>
           </div>
         </CardContent>

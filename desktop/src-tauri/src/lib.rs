@@ -7,23 +7,31 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn apply_web_blocking(domains: Vec<String>) -> Result<blocking::BlockingApplyResult, String> {
-    blocking::apply_web_blocking(domains)
+async fn apply_web_blocking(domains: Vec<String>) -> Result<blocking::BlockingApplyResult, String> {
+    tauri::async_runtime::spawn_blocking(move || blocking::apply_web_blocking(domains))
+        .await
+        .map_err(|error| format!("ExecuNow could not finish web blocking work: {}", error))?
 }
 
 #[tauri::command]
-fn clear_web_blocking() -> Result<(), String> {
-    blocking::clear_web_blocking()
+async fn clear_web_blocking() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(blocking::clear_web_blocking)
+        .await
+        .map_err(|error| format!("ExecuNow could not finish web blocking cleanup: {}", error))?
 }
 
 #[tauri::command]
-fn get_web_blocking_status() -> Result<blocking::WebBlockingStatus, String> {
-    blocking::get_web_blocking_status()
+async fn get_web_blocking_status() -> Result<blocking::WebBlockingStatus, String> {
+    tauri::async_runtime::spawn_blocking(blocking::get_web_blocking_status)
+        .await
+        .map_err(|error| format!("ExecuNow could not read web blocking status: {}", error))?
 }
 
 #[tauri::command]
-fn ensure_web_blocking_permission() -> Result<blocking::WebBlockingPermissionStatus, String> {
-    blocking::ensure_web_blocking_permission()
+async fn ensure_web_blocking_permission() -> Result<blocking::WebBlockingPermissionStatus, String> {
+    tauri::async_runtime::spawn_blocking(blocking::ensure_web_blocking_permission)
+        .await
+        .map_err(|error| format!("ExecuNow could not prepare the Windows helper: {}", error))?
 }
 
 #[tauri::command]
