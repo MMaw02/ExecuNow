@@ -70,7 +70,9 @@ export type SessionAction =
   | { type: "navigated"; value: View }
   | { type: "sessionStarted"; settings: PomodoroSettings; startedAtMs?: number }
   | { type: "pauseToggled"; nowMs?: number }
+  | { type: "sessionCompleted" }
   | { type: "sessionClosed"; value: SessionOutcome }
+  | { type: "outcomeCanceled" }
   | { type: "sessionResultSelected"; value: SessionOutcome }
   | { type: "failureReasonSelected"; value: string }
   | { type: "sessionSaved" }

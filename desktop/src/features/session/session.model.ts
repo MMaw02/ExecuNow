@@ -193,6 +193,12 @@ export function sessionReducer(
         pausedAtMs: nowMs,
         pauseUsed: true,
       };
+    case "sessionCompleted":
+      if (state.view !== "active") {
+        return state;
+      }
+
+      return saveSessionWithResult(state, "completed", "");
     case "sessionClosed":
       return {
         ...state,
@@ -200,6 +206,19 @@ export function sessionReducer(
         sessionResult: action.value,
         segmentStartedAtMs: null,
         segmentEndsAtMs: null,
+        isPaused: false,
+        pausedAtMs: null,
+      };
+    case "outcomeCanceled":
+      if (state.view !== "outcome" || state.remainingSeconds <= 0) {
+        return state;
+      }
+
+      return {
+        ...state,
+        view: "active",
+        sessionResult: null,
+        failureReason: "",
         isPaused: false,
         pausedAtMs: null,
       };
@@ -219,35 +238,11 @@ export function sessionReducer(
         return state;
       }
 
-      const sessionRecord = createSessionRecord(state);
-
-      return {
-        ...state,
-        view: "today",
-        taskTitle: "",
-        sessionTask: "",
-        sessionDuration: state.selectedDuration,
-        sessionPomodoroSettings: state.sessionPomodoroSettings,
-        sessionPhase: "focus",
-        sessionSegmentIndex: 0,
-        elapsedFocusSeconds: 0,
-        elapsedFocusSecondsAtSegmentStart: 0,
-        remainingSeconds: state.selectedDuration * 60,
-        segmentStartedAtMs: null,
-        segmentEndsAtMs: null,
-        isPaused: false,
-        pausedAtMs: null,
-        pauseUsed: false,
-        sessionResult: null,
-        failureReason: "",
-        stats: {
-          ...state.stats,
-          [state.sessionResult]: state.stats[state.sessionResult] + 1,
-          focusMinutes:
-            state.stats.focusMinutes + getCapturedMinutesForSave(state),
-        },
-        history: [sessionRecord, ...state.history].slice(0, 24),
-      };
+      return saveSessionWithResult(
+        state,
+        state.sessionResult,
+        state.failureReason,
+      );
     case "tick": {
       if (state.view !== "active" || state.isPaused) {
         return state;
@@ -313,6 +308,47 @@ function getCapturedMinutesForSave(state: SessionState) {
   return state.sessionResult === "completed"
     ? state.sessionDuration
     : getElapsedMinutes(state);
+}
+
+function saveSessionWithResult(
+  state: SessionState,
+  result: SessionOutcome,
+  failureReason: string,
+): SessionState {
+  const nextState = {
+    ...state,
+    sessionResult: result,
+    failureReason,
+  };
+  const sessionRecord = createSessionRecord(nextState);
+
+  return {
+    ...state,
+    view: "today",
+    taskTitle: "",
+    sessionTask: "",
+    sessionDuration: state.selectedDuration,
+    sessionPomodoroSettings: state.sessionPomodoroSettings,
+    sessionPhase: "focus",
+    sessionSegmentIndex: 0,
+    elapsedFocusSeconds: 0,
+    elapsedFocusSecondsAtSegmentStart: 0,
+    remainingSeconds: state.selectedDuration * 60,
+    segmentStartedAtMs: null,
+    segmentEndsAtMs: null,
+    isPaused: false,
+    pausedAtMs: null,
+    pauseUsed: false,
+    sessionResult: null,
+    failureReason: "",
+    stats: {
+      ...state.stats,
+      [result]: state.stats[result] + 1,
+      focusMinutes:
+        state.stats.focusMinutes + getCapturedMinutesForSave(nextState),
+    },
+    history: [sessionRecord, ...state.history].slice(0, 24),
+  };
 }
 
 function advanceActiveSession(state: SessionState, nowMs: number): SessionState {

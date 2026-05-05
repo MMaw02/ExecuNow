@@ -170,6 +170,7 @@ function App() {
           pauseUsed={state.pauseUsed}
           strictBlocking={state.strictBlocking}
           onTogglePause={actions.togglePause}
+          onCompleteSession={actions.completeSession}
           onCloseSession={actions.closeSession}
           onOpenWidget={() => void widgetRuntime.showSessionWidgetWindow()}
         />
@@ -181,9 +182,11 @@ function App() {
           sessionTask={state.sessionTask}
           sessionResult={state.sessionResult}
           failureReason={state.failureReason}
+          remainingSeconds={state.remainingSeconds}
           stats={state.stats}
           onSessionResultSelect={actions.selectSessionResult}
           onFailureReasonSelect={actions.selectFailureReason}
+          onCancel={actions.cancelOutcome}
           onSaveOutcome={actions.saveOutcome}
         />
       );

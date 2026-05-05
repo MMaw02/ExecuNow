@@ -144,6 +144,9 @@ export function useSessionFlow() {
       togglePause() {
         dispatch({ type: "pauseToggled", nowMs: Date.now() });
       },
+      completeSession() {
+        dispatch({ type: "sessionCompleted" });
+      },
       closeSession(result: SessionOutcome) {
         dispatch({ type: "sessionClosed", value: result });
       },
@@ -152,6 +155,29 @@ export function useSessionFlow() {
       },
       selectFailureReason(value: string) {
         dispatch({ type: "failureReasonSelected", value });
+      },
+      async cancelOutcome() {
+        const currentState = stateRef.current;
+
+        if (currentState.view !== "outcome" || currentState.remainingSeconds <= 0) {
+          return;
+        }
+
+        const blockingResult = await prepareBlockingForSession(
+          currentState,
+          {
+            apply: applyWebBlocking,
+          },
+        );
+
+        if (!blockingResult.ok) {
+          toast.error("ExecuNow could not restore blocking for this session.", {
+            description: blockingResult.error,
+          });
+          return;
+        }
+
+        dispatch({ type: "outcomeCanceled" });
       },
       saveOutcome() {
         dispatch({ type: "sessionSaved" });
