@@ -97,9 +97,12 @@ function App() {
   useEffect(() => {
     void sessionWidgetChannel.publishSnapshot(sessionWidgetSnapshot, MAIN_WINDOW_LABEL);
   }, [
+    sessionWidgetSnapshot.elapsedFocusSeconds,
     sessionWidgetSnapshot.isPaused,
     sessionWidgetSnapshot.pauseUsed,
     sessionWidgetSnapshot.remainingSeconds,
+    sessionWidgetSnapshot.sessionPomodoroSettings.breakMinutes,
+    sessionWidgetSnapshot.sessionPomodoroSettings.focusMinutes,
     sessionWidgetSnapshot.sessionPhase,
     sessionWidgetSnapshot.sessionDuration,
     sessionWidgetSnapshot.sessionTask,
@@ -238,10 +241,8 @@ function App() {
     case "settings":
       content = (
         <SettingsView
-          selectedDuration={state.selectedDuration}
           strictBlocking={state.strictBlocking}
           sessionFlowLocked={derived.sessionFlowLocked}
-          onDurationSelect={actions.selectDuration}
           onStrictBlockingToggle={actions.toggleStrictBlocking}
         />
       );

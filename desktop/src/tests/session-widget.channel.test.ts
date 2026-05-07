@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { DEFAULT_POMODORO_SETTINGS } from "../features/pomodoro/pomodoro.model.ts";
 import { createSessionWidgetSnapshotChannel } from "../features/session/session-widget.channel.ts";
 import { SESSION_WIDGET_SNAPSHOT_STORAGE_KEY } from "../features/session/session-widget.storage.ts";
 
@@ -17,6 +18,8 @@ test("session widget channel bootstraps from storage and publishes live snapshot
         view: "active",
         sessionTask: "Boot from storage",
         sessionDuration: 25,
+        sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+        elapsedFocusSeconds: 0,
         remainingSeconds: 1200,
         sessionPhase: "focus",
         isPaused: false,
@@ -63,6 +66,8 @@ test("session widget channel publishes control events and keeps structural snaps
         view: "active",
         sessionTask: "Deep work",
         sessionDuration: 25,
+        sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+        elapsedFocusSeconds: 0,
         remainingSeconds: 1200,
         sessionPhase: "focus",
         isPaused: false,
@@ -78,6 +83,8 @@ test("session widget channel publishes control events and keeps structural snaps
         view: "active",
         sessionTask: "Deep work",
         sessionDuration: 25,
+        sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+        elapsedFocusSeconds: 1,
         remainingSeconds: 1199,
         sessionPhase: "focus",
         isPaused: false,

@@ -1,4 +1,8 @@
 import type { SessionState, View } from "./session.types.ts";
+import {
+  DEFAULT_POMODORO_SETTINGS,
+  normalizePomodoroSettings,
+} from "../pomodoro/pomodoro.model.ts";
 import type {
   SessionWidgetControl,
   SessionWidgetDisplayState,
@@ -21,6 +25,8 @@ export function createInactiveSessionWidgetSnapshot(): SessionWidgetSnapshot {
     view: "today",
     sessionTask: "",
     sessionDuration: 0,
+    sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+    elapsedFocusSeconds: 0,
     remainingSeconds: 0,
     sessionPhase: "focus",
     isPaused: false,
@@ -35,6 +41,8 @@ export function createSessionWidgetSnapshot(
     | "view"
     | "sessionTask"
     | "sessionDuration"
+    | "sessionPomodoroSettings"
+    | "elapsedFocusSeconds"
     | "remainingSeconds"
     | "sessionPhase"
     | "isPaused"
@@ -46,6 +54,8 @@ export function createSessionWidgetSnapshot(
     view: state.view,
     sessionTask: state.sessionTask,
     sessionDuration: state.sessionDuration,
+    sessionPomodoroSettings: state.sessionPomodoroSettings,
+    elapsedFocusSeconds: state.elapsedFocusSeconds,
     remainingSeconds: state.remainingSeconds,
     sessionPhase: state.sessionPhase,
     isPaused: state.isPaused,
@@ -63,6 +73,11 @@ export function normalizeSessionWidgetSnapshot(
     view: normalizeView(value?.view),
     sessionTask: typeof value?.sessionTask === "string" ? value.sessionTask.trim() : "",
     sessionDuration: normalizeNumber(value?.sessionDuration, fallback.sessionDuration),
+    sessionPomodoroSettings: normalizePomodoroSettings(value?.sessionPomodoroSettings),
+    elapsedFocusSeconds: normalizeNumber(
+      value?.elapsedFocusSeconds,
+      fallback.elapsedFocusSeconds,
+    ),
     remainingSeconds: normalizeNumber(value?.remainingSeconds, fallback.remainingSeconds),
     sessionPhase: value?.sessionPhase === "break" ? "break" : fallback.sessionPhase,
     isPaused: typeof value?.isPaused === "boolean" ? value.isPaused : fallback.isPaused,
@@ -120,6 +135,10 @@ export function shouldPersistSessionWidgetSnapshot(
     previous.view !== next.view ||
     previous.sessionTask !== next.sessionTask ||
     previous.sessionDuration !== next.sessionDuration ||
+    previous.sessionPomodoroSettings.focusMinutes !==
+      next.sessionPomodoroSettings.focusMinutes ||
+    previous.sessionPomodoroSettings.breakMinutes !==
+      next.sessionPomodoroSettings.breakMinutes ||
     previous.sessionPhase !== next.sessionPhase ||
     previous.isPaused !== next.isPaused ||
     previous.pauseUsed !== next.pauseUsed ||

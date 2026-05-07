@@ -46,11 +46,15 @@ export function buildSessionWidgetViewModel(
   const displayState = createSessionWidgetDisplayState(snapshot);
 
   return {
+    elapsedFocusSeconds: snapshot.elapsedFocusSeconds,
     focusStateLabel: displayState.focusStateLabel,
     pauseDisabled: displayState.pauseDisabled,
     remainingSeconds: snapshot.remainingSeconds,
+    sessionDuration: snapshot.sessionDuration,
     sessionActive: displayState.sessionActive,
+    sessionPomodoroSettings: snapshot.sessionPomodoroSettings,
     statusLabel: displayState.statusLabel,
+    strictBlocking: snapshot.strictBlocking,
     title: displayState.title,
   };
 }

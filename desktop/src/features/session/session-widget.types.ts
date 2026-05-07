@@ -1,10 +1,15 @@
-import type { PomodoroSessionPhase } from "../pomodoro/pomodoro.types.ts";
+import type {
+  PomodoroSessionPhase,
+  PomodoroSettings,
+} from "../pomodoro/pomodoro.types.ts";
 import type { View } from "./session.types.ts";
 
 export type SessionWidgetSnapshot = {
   view: View;
   sessionTask: string;
   sessionDuration: number;
+  sessionPomodoroSettings: PomodoroSettings;
+  elapsedFocusSeconds: number;
   remainingSeconds: number;
   sessionPhase: PomodoroSessionPhase;
   isPaused: boolean;

@@ -31,6 +31,8 @@ test("session widget snapshot mirrors active session state", () => {
   assert.equal(snapshot.view, "active");
   assert.equal(snapshot.sessionTask, "Ship session widget");
   assert.equal(snapshot.remainingSeconds, pausedState.remainingSeconds);
+  assert.deepEqual(snapshot.sessionPomodoroSettings, DEFAULT_POMODORO_SETTINGS);
+  assert.equal(snapshot.elapsedFocusSeconds, pausedState.elapsedFocusSeconds);
   assert.equal(snapshot.isPaused, true);
   assert.equal(snapshot.pauseUsed, true);
   assert.equal(snapshot.strictBlocking, true);
@@ -41,6 +43,8 @@ test("session widget snapshot normalizes invalid persisted data", () => {
     view: "unknown",
     sessionTask: "  Review countdown  ",
     sessionDuration: -10,
+    sessionPomodoroSettings: { focusMinutes: 2, breakMinutes: -1 },
+    elapsedFocusSeconds: -40,
     remainingSeconds: Number.NaN,
     isPaused: "yes" as never,
     pauseUsed: true,
@@ -50,6 +54,8 @@ test("session widget snapshot normalizes invalid persisted data", () => {
   assert.equal(normalized.view, "today");
   assert.equal(normalized.sessionTask, "Review countdown");
   assert.equal(normalized.sessionDuration, 0);
+  assert.deepEqual(normalized.sessionPomodoroSettings, DEFAULT_POMODORO_SETTINGS);
+  assert.equal(normalized.elapsedFocusSeconds, 0);
   assert.equal(normalized.remainingSeconds, 0);
   assert.equal(normalized.isPaused, false);
   assert.equal(normalized.pauseUsed, true);
@@ -64,6 +70,8 @@ test("session widget storage persists normalized snapshots", () => {
       view: "active",
       sessionTask: "Deep work",
       sessionDuration: 25,
+      sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+      elapsedFocusSeconds: 0,
       remainingSeconds: 1200,
       sessionPhase: "focus",
       isPaused: false,
@@ -77,6 +85,8 @@ test("session widget storage persists normalized snapshots", () => {
     view: "active",
     sessionTask: "Deep work",
     sessionDuration: 25,
+    sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+    elapsedFocusSeconds: 0,
     remainingSeconds: 1200,
     sessionPhase: "focus",
     isPaused: false,
@@ -93,6 +103,8 @@ test("session widget storage persists normalized snapshots", () => {
     view: "today",
     sessionTask: "",
     sessionDuration: 0,
+    sessionPomodoroSettings: DEFAULT_POMODORO_SETTINGS,
+    elapsedFocusSeconds: 0,
     remainingSeconds: 0,
     sessionPhase: "focus",
     isPaused: false,

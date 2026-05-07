@@ -132,7 +132,9 @@
 
   body.window-session-widget {
     background:
-      linear-gradient(180deg, rgba(7, 22, 44, 0.98), rgba(4, 17, 36, 0.98)),
+      radial-gradient(circle at 14% 50%, rgba(78, 222, 163, 0.08), transparent 24%),
+      radial-gradient(circle at 82% 20%, rgba(25, 120, 229, 0.18), transparent 30%),
+      linear-gradient(180deg, rgba(8, 24, 46, 0.94), rgba(4, 17, 36, 0.98)),
       var(--base-deep);
   }
 }
