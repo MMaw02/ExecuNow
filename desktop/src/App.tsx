@@ -146,11 +146,17 @@ function App() {
           onDurationSelect={actions.selectDuration}
           onStrictBlockingToggle={actions.toggleStrictBlocking}
           onExecuteTask={actions.startSessionFromWidgetTask}
+          onSaveTaskOutcome={actions.saveTaskOutcome}
         />
       );
       break;
     case "tasks":
-      content = <TasksView onExecuteTask={actions.startSessionFromWidgetTask} />;
+      content = (
+        <TasksView
+          onExecuteTask={actions.startSessionFromWidgetTask}
+          onSaveTaskOutcome={actions.saveTaskOutcome}
+        />
+      );
       break;
     case "history":
       content = <HistoryView history={state.history} />;
@@ -186,8 +192,6 @@ function App() {
           sessionResult={state.sessionResult}
           failureReason={state.failureReason}
           remainingSeconds={state.remainingSeconds}
-          stats={state.stats}
-          onSessionResultSelect={actions.selectSessionResult}
           onFailureReasonSelect={actions.selectFailureReason}
           onCancel={actions.cancelOutcome}
           onSaveOutcome={actions.saveOutcome}

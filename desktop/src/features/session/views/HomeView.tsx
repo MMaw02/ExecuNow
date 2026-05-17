@@ -40,16 +40,21 @@ import { PomodoroIndicator } from "../../pomodoro/PomodoroIndicator.tsx";
 import { getPomodoroBreakdown } from "../../pomodoro/pomodoro.model.ts";
 import { usePomodoroSettings } from "../../pomodoro/usePomodoroSettings.ts";
 import { DEFAULT_TASK_TAG, TASK_TAG_OPTIONS } from "../../widget/widget.constants.ts";
+import { TaskDialog } from "../../widget/TaskDialog.tsx";
+import { TaskActionsMenu } from "../../widget/TaskActionsMenu.tsx";
 import { useWidgetTasks } from "../../widget/useWidgetTasks.ts";
 import type { WidgetPriority, WidgetTask } from "../../widget/widget.types.ts";
 import { MIN_CUSTOM_DURATION } from "../session.constants.ts";
+import { OutcomeView } from "./OutcomeView.tsx";
 import type {
   DurationOption,
   SessionRecord,
   SessionTaskDraft,
+  TaskOutcomeDraft,
 } from "../session.types.ts";
 
 type TaskPriority = Exclude<WidgetPriority, null>;
+type DialogState = { mode: "edit"; taskId: string } | null;
 
 type HomeViewProps = {
   taskTitle: string;
@@ -60,6 +65,7 @@ type HomeViewProps = {
   onDurationSelect: (value: DurationOption) => void;
   onStrictBlockingToggle: () => void;
   onExecuteTask: (value: SessionTaskDraft) => void;
+  onSaveTaskOutcome: (value: TaskOutcomeDraft) => void;
 };
 
 const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
@@ -77,10 +83,14 @@ export function HomeView({
   onDurationSelect,
   onStrictBlockingToggle,
   onExecuteTask,
+  onSaveTaskOutcome,
 }: HomeViewProps) {
   const [priority, setPriority] = useState<TaskPriority>("high");
   const [tag, setTag] = useState<string>(DEFAULT_TASK_TAG);
   const [durationInput, setDurationInput] = useState(String(selectedDuration));
+  const [dialogState, setDialogState] = useState<DialogState>(null);
+  const [incompleteTask, setIncompleteTask] = useState<WidgetTask | null>(null);
+  const [incompleteRecord, setIncompleteRecord] = useState<SessionRecord | null>(null);
   const { state: widgetState, actions: widgetActions } = useWidgetTasks();
   const { settings: pomodoroSettings } = usePomodoroSettings();
   const recentCompletedTasks = history.filter((record) => record.result === "completed").slice(0, 3);
@@ -92,6 +102,11 @@ export function HomeView({
     !Number.isFinite(parsedDuration) ||
     (parsedDuration ?? 0) < MIN_CUSTOM_DURATION;
   const canRegisterTask = taskTitle.trim().length > 0 && !durationInvalid;
+  const editingTask =
+    dialogState?.mode === "edit"
+      ? widgetState.tasks.find((task) => task.id === dialogState.taskId) ?? null
+      : null;
+  const isTaskDialogOpen = dialogState?.mode === "edit" && editingTask !== null;
 
   useEffect(() => {
     setDurationInput(String(selectedDuration));
@@ -211,6 +226,48 @@ export function HomeView({
       title: nextTask.title,
       duration: nextTask.estimateMinutes,
     });
+  }
+
+  function handleSaveIncompleteTask(value: {
+    failureReason: string;
+    followUpTask?: Pick<WidgetTask, "title" | "estimateMinutes" | "priority" | "tag">;
+  }) {
+    if (incompleteRecord) {
+      onSaveTaskOutcome({
+        recordId: incompleteRecord.id,
+        task: incompleteRecord.task,
+        duration: incompleteRecord.duration,
+        result: "incomplete",
+        failureReason: value.failureReason,
+      });
+
+      if (value.followUpTask) {
+        widgetActions.addTask(value.followUpTask);
+      }
+
+      setIncompleteRecord(null);
+      return;
+    }
+
+    if (!incompleteTask) {
+      return;
+    }
+
+    onSaveTaskOutcome({
+      task: incompleteTask.title,
+      duration: incompleteTask.estimateMinutes,
+      result: "incomplete",
+      failureReason: value.failureReason,
+    });
+    widgetActions.removeTask(incompleteTask.id);
+    if (value.followUpTask) {
+      widgetActions.addTask(value.followUpTask);
+    }
+    setIncompleteTask(null);
+  }
+
+  function closeTaskDialog() {
+    setDialogState(null);
   }
 
   return (
@@ -375,7 +432,7 @@ export function HomeView({
                   return (
                     <div
                       key={task.id}
-                      className="grid grid-cols-[3px_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-[var(--radius-large)] border border-border bg-[rgba(8,24,46,0.68)] px-4 py-3 transition-colors hover:bg-[rgba(10,28,52,0.84)]"
+                      className="grid grid-cols-[3px_minmax(0,1fr)_auto_auto_auto] items-center gap-3 rounded-[var(--radius-large)] border border-border bg-[rgba(8,24,46,0.68)] px-4 py-3 transition-colors hover:bg-[rgba(10,28,52,0.84)]"
                     >
                       <div className="h-10 rounded-full bg-rose-400/45" aria-hidden="true" />
 
@@ -407,6 +464,13 @@ export function HomeView({
                       >
                         <Play size={15} />
                       </Button>
+
+                      <TaskActionsMenu
+                        taskTitle={task.title}
+                        onEdit={() => setDialogState({ mode: "edit", taskId: task.id })}
+                        onMarkIncomplete={() => setIncompleteTask(task)}
+                        incompleteDisabled
+                      />
                     </div>
                   );
                 })}
@@ -435,7 +499,7 @@ export function HomeView({
                 {recentCompletedTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="grid grid-cols-[3px_minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--radius-large)] border border-border bg-[rgba(8,24,46,0.68)] px-4 py-3 transition-colors hover:bg-[rgba(10,28,52,0.82)]"
+                    className="grid grid-cols-[3px_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-[var(--radius-large)] border border-border bg-[rgba(8,24,46,0.68)] px-4 py-3 transition-colors hover:bg-[rgba(10,28,52,0.82)]"
                   >
                     <div className="h-9 rounded-full bg-emerald-400/50" aria-hidden="true" />
 
@@ -449,6 +513,12 @@ export function HomeView({
                     </div>
 
                     <CheckCircle2 size={16} className="text-emerald-300" />
+
+                    <TaskActionsMenu
+                      taskTitle={task.task}
+                      onMarkIncomplete={() => setIncompleteRecord(task)}
+                      incompleteDisabled={task.completionSource !== "automatic"}
+                    />
                   </div>
                 ))}
               </div>
@@ -460,6 +530,58 @@ export function HomeView({
           )}
         </section>
       </div>
+
+      <TaskDialog
+        mode="edit"
+        open={isTaskDialogOpen}
+        task={editingTask}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeTaskDialog();
+          }
+        }}
+        onSubmit={(value) => {
+          if (editingTask) {
+            widgetActions.updateTask(editingTask.id, value);
+          }
+
+          closeTaskDialog();
+        }}
+      />
+
+      {incompleteTask ? (
+        <OutcomeView
+          mode="task-incomplete"
+          sessionTask={incompleteTask.title}
+          sessionResult="incomplete"
+          failureReason=""
+          followUpTask={{
+            title: `Follow up: ${incompleteTask.title}`,
+            estimateMinutes: incompleteTask.estimateMinutes,
+            priority: incompleteTask.priority,
+            tag: incompleteTask.tag ?? DEFAULT_TASK_TAG,
+          }}
+          onCancel={() => setIncompleteTask(null)}
+          onSaveTaskOutcome={handleSaveIncompleteTask}
+        />
+      ) : null}
+
+      {incompleteRecord ? (
+        <OutcomeView
+          mode="task-incomplete"
+          sessionTask={incompleteRecord.task}
+          sessionResult="incomplete"
+          failureReason=""
+          followUpTask={{
+            title: `Follow up: ${incompleteRecord.task}`,
+            estimateMinutes: incompleteRecord.duration,
+            priority: "medium",
+            tag: DEFAULT_TASK_TAG,
+          }}
+          onCancel={() => setIncompleteRecord(null)}
+          onSaveTaskOutcome={handleSaveIncompleteTask}
+        />
+      ) : null}
     </section>
   );
 }

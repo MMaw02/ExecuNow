@@ -112,19 +112,37 @@ test("pause can only be consumed once", () => {
   assert.equal(afterSecondPauseAttempt.pauseUsed, true);
 });
 
-test("closing a session moves the flow to outcome", () => {
+test("abandoning a session moves the flow to outcome", () => {
   const activeState = createActiveState();
   const next = sessionReducer(activeState, {
     type: "sessionClosed",
-    value: "incomplete",
+    value: "abandoned",
   });
 
   assert.equal(next.view, "outcome");
-  assert.equal(next.sessionResult, "incomplete");
+  assert.equal(next.sessionResult, "abandoned");
   assert.equal(next.isPaused, false);
 });
 
-test("tick completes the session when the timer reaches zero", () => {
+test("closing a session as completed saves immediately", () => {
+  const activeState = createActiveState({
+    elapsedFocusSeconds: 15 * 60,
+  });
+
+  const next = sessionReducer(activeState, {
+    type: "sessionClosed",
+    value: "completed",
+  });
+
+  assert.equal(next.view, "today");
+  assert.equal(next.stats.completed, 1);
+  assert.equal(next.stats.focusMinutes, next.selectedDuration);
+  assert.equal(next.sessionResult, null);
+  assert.equal(next.history[0]?.result, "completed");
+  assert.equal(next.history[0]?.completionSource, "manual");
+});
+
+test("tick saves the session as completed when the timer reaches zero", () => {
   const activeState = createActiveState({
     remainingSeconds: 1,
     elapsedFocusSeconds: 24 * 60 + 59,
@@ -132,9 +150,12 @@ test("tick completes the session when the timer reaches zero", () => {
 
   const next = sessionReducer(activeState, { type: "tick" });
 
-  assert.equal(next.remainingSeconds, 0);
-  assert.equal(next.view, "outcome");
-  assert.equal(next.sessionResult, "completed");
+  assert.equal(next.view, "today");
+  assert.equal(next.stats.completed, 1);
+  assert.equal(next.stats.focusMinutes, next.selectedDuration);
+  assert.equal(next.sessionResult, null);
+  assert.equal(next.history[0]?.result, "completed");
+  assert.equal(next.history[0]?.completionSource, "automatic");
 });
 
 test("tick moves the session into a break after a completed focus block", () => {
@@ -215,6 +236,78 @@ test("saving outcome updates stats and returns to today", () => {
   assert.equal(next.sessionResult, null);
   assert.equal(next.history.length, 1);
   assert.equal(next.history[0]?.result, "incomplete");
+});
+
+test("saving a task outcome records an incomplete task without locking the flow", () => {
+  const state = createInitialSessionState();
+
+  const next = sessionReducer(state, {
+    type: "taskOutcomeSaved",
+    value: {
+      task: "Draft walkthrough",
+      duration: 25,
+      result: "incomplete",
+      failureReason: "Needs a smaller next step",
+    },
+  });
+
+  assert.equal(next.view, "today");
+  assert.equal(next.stats.incomplete, 1);
+  assert.equal(next.stats.focusMinutes, 0);
+  assert.equal(next.history.length, 1);
+  assert.equal(next.history[0]?.task, "Draft walkthrough");
+  assert.equal(next.history[0]?.result, "incomplete");
+  assert.equal(next.history[0]?.failureReason, "Needs a smaller next step");
+});
+
+test("automatic completed records can be marked incomplete later", () => {
+  const activeState = createActiveState({
+    remainingSeconds: 1,
+    elapsedFocusSeconds: 24 * 60 + 59,
+  });
+  const completedState = sessionReducer(activeState, { type: "tick" });
+  const recordId = completedState.history[0]?.id;
+
+  assert.ok(recordId);
+
+  const next = sessionReducer(completedState, {
+    type: "taskOutcomeSaved",
+    value: {
+      recordId,
+      task: "Draft walkthrough",
+      duration: 25,
+      result: "incomplete",
+      failureReason: "Needs another pass",
+    },
+  });
+
+  assert.equal(next.stats.completed, 0);
+  assert.equal(next.stats.incomplete, 1);
+  assert.equal(next.stats.focusMinutes, completedState.stats.focusMinutes);
+  assert.equal(next.history[0]?.result, "incomplete");
+  assert.equal(next.history[0]?.failureReason, "Needs another pass");
+  assert.equal(next.history[0]?.completionSource, undefined);
+});
+
+test("manual completed records cannot be marked incomplete later", () => {
+  const activeState = createActiveState();
+  const completedState = sessionReducer(activeState, { type: "sessionCompleted" });
+  const recordId = completedState.history[0]?.id;
+
+  assert.ok(recordId);
+
+  const next = sessionReducer(completedState, {
+    type: "taskOutcomeSaved",
+    value: {
+      recordId,
+      task: "Draft walkthrough",
+      duration: 25,
+      result: "incomplete",
+      failureReason: "Changed my mind",
+    },
+  });
+
+  assert.deepEqual(next, completedState);
 });
 
 test("navigation locks during active and outcome views", () => {

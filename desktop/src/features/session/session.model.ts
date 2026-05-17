@@ -6,10 +6,12 @@ import {
 } from "../pomodoro/pomodoro.model.ts";
 import type {
   SessionAction,
+  SessionCompletionSource,
   SessionOutcome,
   SessionRecord,
   SessionState,
   SessionStats,
+  TaskOutcomeDraft,
   SessionTaskDraft,
   View,
 } from "./session.types.ts";
@@ -198,8 +200,12 @@ export function sessionReducer(
         return state;
       }
 
-      return saveSessionWithResult(state, "completed", "");
+      return saveSessionWithResult(state, "completed", "", "manual");
     case "sessionClosed":
+      if (action.value === "completed") {
+        return saveSessionWithResult(state, "completed", "", "manual");
+      }
+
       return {
         ...state,
         view: "outcome",
@@ -243,6 +249,8 @@ export function sessionReducer(
         state.sessionResult,
         state.failureReason,
       );
+    case "taskOutcomeSaved":
+      return saveTaskOutcome(state, action.value);
     case "tick": {
       if (state.view !== "active" || state.isPaused) {
         return state;
@@ -292,7 +300,7 @@ export function getElapsedMinutes(state: SessionState) {
 }
 
 function createSessionRecord(state: SessionState): SessionRecord {
-  return {
+  const record: SessionRecord = {
     id: `${Date.now()}`,
     task: state.sessionTask || "Focus block",
     duration: state.sessionDuration,
@@ -302,6 +310,8 @@ function createSessionRecord(state: SessionState): SessionRecord {
     strictBlocking: state.strictBlocking,
     endedAt: new Date().toISOString(),
   };
+
+  return record;
 }
 
 function getCapturedMinutesForSave(state: SessionState) {
@@ -314,6 +324,7 @@ function saveSessionWithResult(
   state: SessionState,
   result: SessionOutcome,
   failureReason: string,
+  completionSource?: SessionCompletionSource,
 ): SessionState {
   const nextState = {
     ...state,
@@ -321,6 +332,13 @@ function saveSessionWithResult(
     failureReason,
   };
   const sessionRecord = createSessionRecord(nextState);
+  const recordWithCompletionSource =
+    result === "completed" && completionSource
+      ? {
+          ...sessionRecord,
+          completionSource,
+        }
+      : sessionRecord;
 
   return {
     ...state,
@@ -346,6 +364,75 @@ function saveSessionWithResult(
       [result]: state.stats[result] + 1,
       focusMinutes:
         state.stats.focusMinutes + getCapturedMinutesForSave(nextState),
+    },
+    history: [recordWithCompletionSource, ...state.history].slice(0, 24),
+  };
+}
+
+function saveTaskOutcome(
+  state: SessionState,
+  draft: TaskOutcomeDraft,
+): SessionState {
+  const task = draft.task.trim();
+
+  if (!task) {
+    return state;
+  }
+
+  const duration = Math.max(Math.trunc(draft.duration), 1);
+  const recordToUpdate =
+    draft.recordId !== undefined
+      ? state.history.find((record) => record.id === draft.recordId)
+      : null;
+
+  if (
+    recordToUpdate &&
+    recordToUpdate.result === "completed" &&
+    recordToUpdate.completionSource === "automatic"
+  ) {
+    return {
+      ...state,
+      stats: {
+        ...state.stats,
+        completed: Math.max(state.stats.completed - 1, 0),
+        incomplete: state.stats.incomplete + 1,
+      },
+      history: state.history.map((record) => {
+        if (record.id !== recordToUpdate.id) {
+          return record;
+        }
+
+        const { completionSource: _completionSource, ...recordWithoutCompletionSource } = record;
+
+        return {
+          ...recordWithoutCompletionSource,
+          result: draft.result,
+          failureReason: draft.failureReason.trim(),
+        };
+      }),
+    };
+  }
+
+  if (draft.recordId !== undefined) {
+    return state;
+  }
+
+  const sessionRecord: SessionRecord = {
+    id: `${Date.now()}`,
+    task,
+    duration,
+    capturedMinutes: 0,
+    result: draft.result,
+    failureReason: draft.failureReason.trim(),
+    strictBlocking: state.strictBlocking,
+    endedAt: new Date().toISOString(),
+  };
+
+  return {
+    ...state,
+    stats: {
+      ...state.stats,
+      [draft.result]: state.stats[draft.result] + 1,
     },
     history: [sessionRecord, ...state.history].slice(0, 24),
   };
@@ -413,18 +500,21 @@ function completeSession(
   state: SessionState,
   elapsedFocusSeconds: number,
 ): SessionState {
-  return {
-    ...state,
-    elapsedFocusSeconds,
-    elapsedFocusSecondsAtSegmentStart: elapsedFocusSeconds,
-    remainingSeconds: 0,
-    segmentStartedAtMs: null,
-    segmentEndsAtMs: null,
-    isPaused: false,
-    pausedAtMs: null,
-    view: "outcome",
-    sessionResult: "completed",
-  };
+  return saveSessionWithResult(
+    {
+      ...state,
+      elapsedFocusSeconds,
+      elapsedFocusSecondsAtSegmentStart: elapsedFocusSeconds,
+      remainingSeconds: 0,
+      segmentStartedAtMs: null,
+      segmentEndsAtMs: null,
+      isPaused: false,
+      pausedAtMs: null,
+    },
+    "completed",
+    "",
+    "automatic",
+  );
 }
 
 function resolveSegmentTiming(

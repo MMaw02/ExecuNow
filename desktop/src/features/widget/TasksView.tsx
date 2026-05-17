@@ -6,7 +6,6 @@ import {
   Clock3,
   Grip,
   Hash,
-  PencilLine,
   Plus,
 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -23,16 +22,19 @@ import {
   sectionLabelClassName,
 } from "../../shared/components/ui/styles.ts";
 import { cn } from "../../shared/lib/cn.ts";
-import type { SessionTaskDraft } from "../session/session.types.ts";
+import { OutcomeView } from "../session/views/OutcomeView.tsx";
+import type { SessionTaskDraft, TaskOutcomeDraft } from "../session/session.types.ts";
+import { DEFAULT_TASK_TAG } from "./widget.constants.ts";
 import { TaskDialog } from "./TaskDialog.tsx";
+import { TaskActionsMenu } from "./TaskActionsMenu.tsx";
 import {
   filterWidgetTasks,
   type WidgetTaskFilter,
 } from "./widget.model.ts";
 import { useWidgetTasks } from "./useWidgetTasks.ts";
-import type { WidgetPriority } from "./widget.types.ts";
+import type { WidgetPriority, WidgetTask } from "./widget.types.ts";
 
-type DialogState =
+export type DialogState =
   | { mode: "create" }
   | { mode: "edit"; taskId: string }
   | null;
@@ -45,12 +47,14 @@ const FILTER_LABELS: Record<WidgetTaskFilter, string> = {
 
 type TasksViewProps = {
   onExecuteTask: (value: SessionTaskDraft) => void;
+  onSaveTaskOutcome: (value: TaskOutcomeDraft) => void;
 };
 
-export function TasksView({ onExecuteTask }: TasksViewProps) {
+export function TasksView({ onExecuteTask, onSaveTaskOutcome }: TasksViewProps) {
   const { state, actions } = useWidgetTasks();
   const [activeFilter, setActiveFilter] = useState<WidgetTaskFilter>("all");
   const [dialogState, setDialogState] = useState<DialogState>(null);
+  const [incompleteTask, setIncompleteTask] = useState<WidgetTask | null>(null);
 
   const visibleTasks = useMemo(
     () => filterWidgetTasks(state.tasks, activeFilter),
@@ -87,6 +91,27 @@ export function TasksView({ onExecuteTask }: TasksViewProps) {
       title: task.title,
       duration: task.estimateMinutes,
     });
+  }
+
+  function handleSaveIncompleteTask(value: {
+    failureReason: string;
+    followUpTask?: Pick<WidgetTask, "title" | "estimateMinutes" | "priority" | "tag">;
+  }) {
+    if (!incompleteTask) {
+      return;
+    }
+
+    onSaveTaskOutcome({
+      task: incompleteTask.title,
+      duration: incompleteTask.estimateMinutes,
+      result: "incomplete",
+      failureReason: value.failureReason,
+    });
+    actions.removeTask(incompleteTask.id);
+    if (value.followUpTask) {
+      actions.addTask(value.followUpTask);
+    }
+    setIncompleteTask(null);
   }
 
   return (
@@ -158,7 +183,7 @@ export function TasksView({ onExecuteTask }: TasksViewProps) {
               <article
                 key={task.id}
                 className={cn(
-                  "grid gap-3 rounded-[var(--radius-large)] border px-4 py-4 transition-colors sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center sm:px-5",
+                  "grid gap-3 rounded-[var(--radius-large)] border px-4 py-4 transition-colors sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] sm:items-center sm:px-5",
                   task.completed
                     ? "border-emerald-400/16 bg-emerald-400/5"
                     : "border-border bg-card/84",
@@ -226,16 +251,12 @@ export function TasksView({ onExecuteTask }: TasksViewProps) {
                     <CirclePlay size={19} />
                   </Button>
 
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-12 w-12 rounded-full border-border bg-muted/16"
-                    onClick={() => setDialogState({ mode: "edit", taskId: task.id })}
-                    aria-label={`Edit ${task.title}`}
-                    title={`Edit ${task.title}`}
-                  >
-                    <PencilLine size={15} />
-                  </Button>
+                  <TaskActionsMenu
+                    taskTitle={task.title}
+                    onEdit={() => setDialogState({ mode: "edit", taskId: task.id })}
+                    onMarkIncomplete={() => setIncompleteTask(task)}
+                    incompleteDisabled
+                  />
                 </div>
               </article>
             ))}
@@ -279,6 +300,23 @@ export function TasksView({ onExecuteTask }: TasksViewProps) {
           closeDialog();
         }}
       />
+
+      {incompleteTask ? (
+        <OutcomeView
+          mode="task-incomplete"
+          sessionTask={incompleteTask.title}
+          sessionResult="incomplete"
+          failureReason=""
+          followUpTask={{
+            title: `Follow up: ${incompleteTask.title}`,
+            estimateMinutes: incompleteTask.estimateMinutes,
+            priority: incompleteTask.priority,
+            tag: incompleteTask.tag ?? DEFAULT_TASK_TAG,
+          }}
+          onCancel={() => setIncompleteTask(null)}
+          onSaveTaskOutcome={handleSaveIncompleteTask}
+        />
+      ) : null}
     </section>
   );
 }

@@ -8,6 +8,7 @@ export type View = NavView | "active" | "outcome";
 export type DurationOption = number;
 export type SessionOutcome = "completed" | "incomplete" | "abandoned";
 export type SessionResult = SessionOutcome | null;
+export type SessionCompletionSource = "automatic" | "manual";
 
 export type SessionStats = {
   completed: number;
@@ -25,11 +26,20 @@ export type SessionRecord = {
   failureReason: string;
   strictBlocking: boolean;
   endedAt: string;
+  completionSource?: SessionCompletionSource;
 };
 
 export type SessionTaskDraft = {
   title: string;
   duration: DurationOption;
+};
+
+export type TaskOutcomeDraft = {
+  recordId?: string;
+  task: string;
+  duration: DurationOption;
+  result: Extract<SessionOutcome, "incomplete">;
+  failureReason: string;
 };
 
 export type SessionState = {
@@ -76,6 +86,7 @@ export type SessionAction =
   | { type: "sessionResultSelected"; value: SessionOutcome }
   | { type: "failureReasonSelected"; value: string }
   | { type: "sessionSaved" }
+  | { type: "taskOutcomeSaved"; value: TaskOutcomeDraft }
   | { type: "tick"; nowMs?: number };
 
 export type NavigationItem = {

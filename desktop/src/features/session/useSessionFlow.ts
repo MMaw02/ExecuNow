@@ -18,6 +18,7 @@ import type {
   DurationOption,
   NavView,
   SessionOutcome,
+  TaskOutcomeDraft,
   SessionTaskDraft,
   View,
 } from "./session.types.ts";
@@ -181,6 +182,9 @@ export function useSessionFlow() {
       },
       saveOutcome() {
         dispatch({ type: "sessionSaved" });
+      },
+      saveTaskOutcome(value: TaskOutcomeDraft) {
+        dispatch({ type: "taskOutcomeSaved", value });
       },
     },
   };
